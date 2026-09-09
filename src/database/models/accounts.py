@@ -1,6 +1,6 @@
 import enum
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -73,6 +73,21 @@ class User(Base):
         "UserProfile", back_populates="user", cascade="all, delete-orphan"
     )
 
+    activation_token: Mapped[Optional["ActivationToken"]] = relationship(
+        "ActivationToken", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    password_reset_token: Mapped[Optional["PasswordResetToken"]] = relationship(
+        "PasswordResetToken", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    refresh_tokens: Mapped[List["RefreshToken"]] = relationship(
+        "RefreshToken", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self):
+        return f"<User(id={self.id}, email={self.email})>"
+
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
@@ -89,6 +104,13 @@ class UserProfile(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
     )
     user: Mapped[User] = relationship("User", back_populates="profile")
+
+    def __repr__(self):
+        return (
+            f"<UserProfile(id={self.id}, first_name={self.first_name}, "
+            f"last_name={self.last_name}, "
+            f"gender={self.gender}, date_of_birth={self.date_of_birth})>"
+        )
 
 
 class BaseToken(Base):
@@ -129,6 +151,12 @@ class PasswordResetToken(BaseToken):
 
     __table_args__ = (UniqueConstraint("user_id"),)
 
+    def __repr__(self):
+        return (
+            f"<PasswordResetToken(id={self.id}, token={self.token}, "
+            f"expires_at={self.expires_at})>"
+        )
+
 
 class RefreshToken(BaseToken):
     __tablename__ = "refresh_tokens"
@@ -137,3 +165,9 @@ class RefreshToken(BaseToken):
     token: Mapped[str] = mapped_column(
         String(512), unique=True, nullable=False, default=generate_secure_token
     )
+
+    def __repr__(self):
+        return (
+            f"<RefreshToken(id={self.id}, token={self.token}, "
+            f"expires_at={self.expires_at})>"
+        )
