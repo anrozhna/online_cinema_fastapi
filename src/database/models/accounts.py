@@ -14,9 +14,11 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from database.models.base import Base
+from database.validators import accounts as validators
+from security.passwords import hash_password, verify_password
 from security.utils import generate_secure_token
 
 
@@ -87,6 +89,47 @@ class User(Base):
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email})>"
+
+    def has_group(self, group_name: UserGroupEnum) -> bool:
+        return self.group.name == group_name
+
+    @classmethod
+    def create(
+        cls, email: str, raw_password: str, group_id: int | Mapped[int]
+    ) -> "User":
+        """
+        Factory method to create a new User instance.
+
+        This method simplifies the creation of a new user by handling
+        password hashing and setting required attributes.
+        """
+        user = cls(email=email, group_id=group_id)
+        user.password = raw_password
+        return user
+
+    @property
+    def password(self) -> None:
+        raise AttributeError(
+            "Password is write-only. Use the setter to set the password."
+        )
+
+    @password.setter
+    def password(self, raw_password: str) -> None:
+        """
+        Set the user's password after validating its strength and hashing it.
+        """
+        validators.validate_password_strength(raw_password)
+        self._hashed_password = hash_password(raw_password)
+
+    def verify_password(self, raw_password: str) -> bool:
+        """
+        Verify the provided password against the stored hashed password.
+        """
+        return verify_password(raw_password, self._hashed_password)
+
+    @validates("email")
+    def validate_email(self, key, value):
+        return validators.validate_email(value.lower())
 
 
 class UserProfile(Base):
