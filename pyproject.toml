@@ -5,7 +5,7 @@ description = ""
 authors = [
     {name = "Anna", email = "annalepiska@gmail.com"}
 ]
-requires-python = "^3.11"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastapi (>=0.141.1,<0.142.0)",
     "uvicorn[standard] (>=0.52.4,<0.53.0)",
