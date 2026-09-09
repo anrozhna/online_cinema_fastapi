@@ -1,6 +1,15 @@
 import enum
+from datetime import datetime
 
-from sqlalchemy import Integer, Enum
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.models.base import Base
@@ -29,3 +38,28 @@ class UserGroup(Base):
 
     def __repr__(self):
         return f"<UserGroup(id={self.id}, name={self.name})>"
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    _hashed_password: Mapped[str] = mapped_column(
+        "hashed_password", String(255), nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+    group_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("user_groups.id"), nullable=False
+    )
+
+    group: Mapped["UserGroup"] = relationship("UserGroup", back_populates="users")
