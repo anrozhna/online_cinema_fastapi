@@ -209,6 +209,20 @@ class RefreshToken(BaseToken):
         String(512), unique=True, nullable=False, default=generate_secure_token
     )
 
+    @classmethod
+    def create(
+        cls, user_id: int | Mapped[int], days_valid: int, token: str
+    ) -> "RefreshToken":
+        """
+        Factory method to create a new RefreshToken instance.
+
+        This method simplifies the creation of a new refresh token by calculating
+        the expiration date based on the provided number of valid days and setting
+        the required attributes.
+        """
+        expires_at = datetime.now(timezone.utc) + timedelta(days=days_valid)
+        return cls(user_id=user_id, expires_at=expires_at, token=token)
+
     def __repr__(self):
         return (
             f"<RefreshToken(id={self.id}, token={self.token}, "
