@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -11,6 +11,7 @@ from config.dependencies import CurrentUser, get_db, get_jwt_auth_manager, get_s
 from config.settings import BaseAppSettings
 from database.models.accounts import (
     ActivationToken,
+    PasswordResetToken,
     RefreshToken,
     User,
     UserGroup,
@@ -21,6 +22,7 @@ from schemas.accounts import (
     LogoutRequestSchema,
     MessageResponseSchema,
     PasswordChangeRequestSchema,
+    PasswordResetRequestSchema,
     TokenRefreshRequestSchema,
     TokenRefreshResponseSchema,
     UserActivationRequestSchema,
@@ -323,10 +325,10 @@ async def accounts_refresh(
     description="Logout the user by invalidating the refresh token.",
     status_code=status.HTTP_200_OK,
     responses={
-        status.HTTP_200_OK: {
+        200: {
             "description": "User logged out successfully.",
         },
-        status.HTTP_401_UNAUTHORIZED: {
+        401: {
             "description": "Invalid refresh token.",
         },
     },
@@ -357,13 +359,13 @@ async def logout(
     description="Change the password for the currently authenticated user.",
     status_code=status.HTTP_200_OK,
     responses={
-        status.HTTP_200_OK: {
+        200: {
             "description": "Password changed successfully.",
         },
-        status.HTTP_401_UNAUTHORIZED: {
+        401: {
             "description": "Invalid or missing access token, or wrong old password.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        422: {
             "description": "New password does not meet strength requirements, "
             "or matches the old password."
         },
@@ -395,3 +397,56 @@ async def change_password(
     await db.commit()
 
     return MessageResponseSchema(message="Password changed successfully.")
+
+
+@router.post(
+    path="password-reset/request/",
+    response_model=MessageResponseSchema,
+    summary="Request Password Reset Token",
+    description=(
+        "Allows a user to request a password reset token. "
+        "If the user exists and is active, a new token will be generated "
+        "and any existing tokens will be invalidated."
+    ),
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "The request was successful. This response is always "
+            "returned regardless of the user's existence or status."
+        },
+    },
+)
+async def request_password_reset_token(
+    data: PasswordResetRequestSchema,
+    db: DB,
+):
+    stmt = select(User).where(User.email == data.email)
+    result = await db.execute(stmt)
+    user = result.scalar()
+
+    success_message = MessageResponseSchema(
+        message="If you are registered, you will receive an email with instructions."
+    )
+
+    if not user or not user.is_active:
+        return success_message
+
+    await db.execute(
+        delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
+    )
+
+    reset_token = PasswordResetToken(user_id=user.id)
+    db.add(reset_token)
+    await db.commit()
+
+    # TODO(feature/accounts-notifications): replace with celery-task
+    # reset_link = (
+    #     f"http://127.0.0.1/accounts/password-reset/complete/"
+    #     f"?email={user.email}&token={reset_token.token}"
+    # )
+    #
+    # background_tasks.add_task(
+    #     email_sender.send_password_reset_email, str(data.email), reset_link
+    # )
+
+    return success_message
