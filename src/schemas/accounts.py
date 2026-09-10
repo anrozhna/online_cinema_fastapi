@@ -42,3 +42,20 @@ class MessageResponseSchema(BaseModel):
 
 class UserActivationResendRequestSchema(BaseModel):
     email: EmailStr
+
+
+class UserLoginRequestSchema(BaseModel):
+    email: EmailStr
+    token: str
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value):
+        return accounts_validators.validate_password_strength(value)
+
+
+class UserLoginResponseSchema(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
