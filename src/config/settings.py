@@ -15,6 +15,7 @@ class BaseAppSettings(BaseSettings):
     )
 
     BASE_DIR: Path = Path(__file__).parent.parent
+    LOGIN_TIME_DAYS: int = 7
 
 
 class Settings(BaseAppSettings):
