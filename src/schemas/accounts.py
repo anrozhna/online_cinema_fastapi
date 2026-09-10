@@ -61,9 +61,17 @@ class UserLoginResponseSchema(BaseModel):
     token_type: str = "bearer"
 
 
-class TokenRefreshRequestSchema(BaseModel):
+class BaseRefreshTokenSchema(BaseModel):
     refresh_token: str
+
+
+class TokenRefreshRequestSchema(BaseRefreshTokenSchema):
+    pass
 
 
 class TokenRefreshResponseSchema(BaseModel):
     access_token: str
+
+
+class LogoutRequestSchema(BaseRefreshTokenSchema):
+    pass

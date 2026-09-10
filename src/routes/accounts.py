@@ -18,6 +18,7 @@ from database.models.accounts import (
 )
 from exceptions.security import BaseSecurityError
 from schemas.accounts import (
+    LogoutRequestSchema,
     MessageResponseSchema,
     TokenRefreshRequestSchema,
     TokenRefreshResponseSchema,
@@ -312,3 +313,37 @@ async def accounts_refresh(
     new_access_token = jwt_manager.create_access_token({"user_id": user.id})
 
     return TokenRefreshResponseSchema(access_token=new_access_token)
+
+
+@router.post(
+    path="/logout/",
+    response_model=MessageResponseSchema,
+    summary="Logout",
+    description="Logout the user by invalidating the refresh token.",
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "User logged out successfully.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Invalid refresh token.",
+        },
+    },
+)
+async def logout(
+    logout_data: LogoutRequestSchema,
+    db: DB,
+):
+    stmt = select(RefreshToken).where(RefreshToken.token == logout_data.refresh_token)
+    result = await db.execute(stmt)
+    refresh_token = result.scalar()
+
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token."
+        )
+
+    await db.delete(refresh_token)
+    await db.commit()
+
+    return MessageResponseSchema(message="User logged out successfully.")
