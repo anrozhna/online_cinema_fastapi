@@ -173,7 +173,6 @@ async def resend_activation_link(
     stmt = (
         select(User)
         .options(joinedload(User.activation_token))
-        .join(ActivationToken)
         .where(User.email == request_data.email)
     )
     result = await db.execute(stmt)
@@ -205,7 +204,7 @@ async def resend_activation_link(
     return generic_response
 
 
-router.post(
+@router.post(
     path="/login/",
     response_model=UserLoginResponseSchema,
     summary="Login a user",
@@ -217,8 +216,6 @@ router.post(
         500: {"description": "An error occurred while processing the request."},
     },
 )
-
-
 async def login(
     login_data: UserLoginRequestSchema,
     db: DB,
@@ -377,7 +374,7 @@ async def change_password(
     db: DB,
     current_user: CurrentUser,
 ):
-    if not current_user.verify_password(password_data.old_password):
+    if not current_user.verify_password(raw_password=password_data.old_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Wrong old password."
         )
@@ -401,7 +398,7 @@ async def change_password(
 
 
 @router.post(
-    path="password-reset/request/",
+    path="/password-reset/request/",
     response_model=MessageResponseSchema,
     summary="Request Password Reset Token",
     description=(
@@ -507,6 +504,12 @@ async def reset_password(
         user.password = data.password
         await db.delete(reset_token)
         await db.commit()
+
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)
+        )
 
     except SQLAlchemyError:
         await db.rollback()
