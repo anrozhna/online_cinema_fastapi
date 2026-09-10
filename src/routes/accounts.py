@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,9 +12,11 @@ from database.models.accounts import ActivationToken, User, UserGroup, UserGroup
 from schemas.accounts import (
     MessageResponseSchema,
     UserActivationRequestSchema,
+    UserActivationResendRequestSchema,
     UserRegistrationRequestSchema,
     UserRegistrationResponseSchema,
 )
+from security.utils import generate_secure_token
 
 router = APIRouter()
 DB = Annotated[AsyncSession, Depends(get_db)]
@@ -135,3 +137,53 @@ async def activate_account(
     await db.commit()
 
     return MessageResponseSchema(message="User account activated successfully.")
+
+
+@router.post(
+    path="/activate/resend-link/",
+    response_model=MessageResponseSchema,
+    summary="Resend activation email",
+    description="Resend the activation email to a user's email address.",
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {"description": "The activation email was successfully resent."},
+        404: {"description": "User is not found."},
+    },
+)
+async def resend_activation_link(
+    request_data: UserActivationResendRequestSchema,
+    db: DB,
+):
+    stmt = (
+        select(User)
+        .options(joinedload(User.activation_token))
+        .join(ActivationToken)
+        .where(User.email == request_data.email)
+    )
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    generic_response = MessageResponseSchema(
+        message="If the account exists and is not active, "
+        "a new activation link has been sent."
+    )
+
+    if not user or user.is_active:
+        return generic_response
+
+    if user.activation_token:
+        await db.delete(user.activation_token)
+        await db.flush()
+
+    new_token = ActivationToken(
+        user_id=user.id,
+        token=generate_secure_token(),
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+    )
+    db.add(new_token)
+    await db.commit()
+
+    # TODO(feature/accounts-notifications): replace with celery-task
+    # send_activation_email_task.delay(user.email, new_token.token)
+
+    return generic_response
