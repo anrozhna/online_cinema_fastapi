@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, cast
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -16,8 +16,11 @@ from database.models.accounts import (
     UserGroup,
     UserGroupEnum,
 )
+from exceptions.security import BaseSecurityError
 from schemas.accounts import (
     MessageResponseSchema,
+    TokenRefreshRequestSchema,
+    TokenRefreshResponseSchema,
     UserActivationRequestSchema,
     UserActivationResendRequestSchema,
     UserLoginRequestSchema,
@@ -72,7 +75,7 @@ async def register_user(
         db.add(new_user)
         await db.flush()
 
-        activation_token = ActivationToken(user_id=cast(int, new_user.id))
+        activation_token = ActivationToken(user_id=new_user.id)
         db.add(activation_token)
 
         await db.commit()
@@ -123,9 +126,7 @@ async def activate_account(
             detail="Invalid or expired activation token.",
         )
 
-    expires_at = cast(datetime, activation_token.expires_at).replace(
-        tzinfo=timezone.utc
-    )
+    expires_at = activation_token.expires_at.replace(tzinfo=timezone.utc)
 
     if expires_at < datetime.now(timezone.utc):
         await db.delete(activation_token)
@@ -257,3 +258,57 @@ async def login(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while processing the request.",
         )
+
+
+@router.post(
+    path="/refresh/",
+    response_model=TokenRefreshResponseSchema,
+    summary="Refresh access token",
+    description="Refresh access token using refresh token",
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {"description": "Access token successfully refreshed."},
+        400: {"description": "The provided refresh token is invalid or expired."},
+        401: {
+            "description": "The provided refresh token does not exist in the database."
+        },
+        404: {
+            "description": "The user associated with the refresh token does not exist."
+        },
+    },
+)
+async def accounts_refresh(
+    token_data: TokenRefreshRequestSchema,
+    db: DB,
+    jwt_manager: JWTAuthManagerInterface = Depends(get_jwt_auth_manager),
+):
+    try:
+        decoded_refresh_token = jwt_manager.decode_refresh_token(
+            token_data.refresh_token
+        )
+    except BaseSecurityError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error))
+
+    user_id = decoded_refresh_token.get("user_id")
+
+    stmt = select(RefreshToken).where(RefreshToken.token == token_data.refresh_token)
+    result = await db.execute(stmt)
+    refresh_token = result.scalar()
+
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token not found."
+        )
+
+    stmt_user = select(User).where(User.id == user_id)
+    result = await db.execute(stmt_user)
+    user = result.scalar()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+        )
+
+    new_access_token = jwt_manager.create_access_token({"user_id": user.id})
+
+    return TokenRefreshResponseSchema(access_token=new_access_token)
