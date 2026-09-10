@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from config.dependencies import get_db, get_jwt_auth_manager, get_settings
+from config.dependencies import CurrentUser, get_db, get_jwt_auth_manager, get_settings
 from config.settings import BaseAppSettings
 from database.models.accounts import (
     ActivationToken,
@@ -20,6 +20,7 @@ from exceptions.security import BaseSecurityError
 from schemas.accounts import (
     LogoutRequestSchema,
     MessageResponseSchema,
+    PasswordChangeRequestSchema,
     TokenRefreshRequestSchema,
     TokenRefreshResponseSchema,
     UserActivationRequestSchema,
@@ -347,3 +348,50 @@ async def logout(
     await db.commit()
 
     return MessageResponseSchema(message="User logged out successfully.")
+
+
+@router.post(
+    path="/change-password/",
+    response_model=MessageResponseSchema,
+    summary="Change password",
+    description="Change the password for the currently authenticated user.",
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Password changed successfully.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Invalid or missing access token, or wrong old password.",
+        },
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+            "description": "New password does not meet strength requirements, "
+            "or matches the old password."
+        },
+    },
+)
+async def change_password(
+    password_data: PasswordChangeRequestSchema,
+    db: DB,
+    current_user: CurrentUser,
+):
+    if not current_user.verify_password(password_data.old_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Wrong old password."
+        )
+
+    if current_user.verify_password(raw_password=password_data.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="New password must be different from the old password.",
+        )
+
+    try:
+        current_user.password = password_data.new_password
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    await db.commit()
+
+    return MessageResponseSchema(message="Password changed successfully.")
