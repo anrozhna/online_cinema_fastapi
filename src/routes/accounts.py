@@ -22,6 +22,7 @@ from schemas.accounts import (
     LogoutRequestSchema,
     MessageResponseSchema,
     PasswordChangeRequestSchema,
+    PasswordResetCompleteRequestSchema,
     PasswordResetRequestSchema,
     TokenRefreshRequestSchema,
     TokenRefreshResponseSchema,
@@ -252,16 +253,16 @@ async def login(
         db.add(refresh_token_record)
         await db.commit()
 
-        return UserLoginResponseSchema(
-            access_token=access_token, refresh_token=refresh_token, token_type="bearer"
-        )
-
     except SQLAlchemyError:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while processing the request.",
         )
+
+    return UserLoginResponseSchema(
+        access_token=access_token, refresh_token=refresh_token, token_type="bearer"
+    )
 
 
 @router.post(
@@ -450,3 +451,75 @@ async def request_password_reset_token(
     # )
 
     return success_message
+
+
+@router.post(
+    path="/reset-password/complete/",
+    response_model=MessageResponseSchema,
+    summary="Complete Password Reset",
+    description="Reset a user's password if a valid token is provided.",
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {"description": "Password reset successfully."},
+        400: {
+            "description": "The provided email, token, or password is invalid, "
+            "or the token has expired."
+        },
+        500: {
+            "description": "An unexpected error occurred while resetting the password."
+        },
+    },
+)
+async def reset_password(
+    data: PasswordResetCompleteRequestSchema,
+    db: DB,
+):
+    stmt = select(User).where(User.email == data.email)
+    result = await db.execute(stmt)
+    user = result.scalar()
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or token."
+        )
+
+    stmt_token = select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
+    result = await db.execute(stmt_token)
+    reset_token = result.scalar()
+
+    if reset_token is None or reset_token.token != data.token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email or token.",
+        )
+
+    expires_at = reset_token.expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at < datetime.now(timezone.utc):
+        await db.delete(reset_token)
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email or token.",
+        )
+
+    try:
+        user.password = data.password
+        await db.delete(reset_token)
+        await db.commit()
+
+    except SQLAlchemyError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while resetting the password.",
+        )
+
+    # TODO(feature/accounts-notifications): replace with celery-task
+    # login_link = "http://127.0.0.1/accounts/login/"
+    #
+    # background_tasks.add_task(
+    #     email_sender.send_password_reset_complete_email, str(data.email), login_link
+    # )
+
+    return MessageResponseSchema(message="Password reset successfully.")
