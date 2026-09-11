@@ -519,12 +519,6 @@ async def reset_password(
         await db.delete(reset_token)
         await db.commit()
 
-    except ValueError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)
-        )
-
     except SQLAlchemyError:
         await db.rollback()
         raise HTTPException(
