@@ -18,6 +18,7 @@ from exceptions.security import BaseSecurityError
 from notifications.tasks import (
     send_activation_complete_email_task,
     send_activation_email_task,
+    send_password_reset_email_task,
 )
 from schemas.accounts import (
     LogoutRequestSchema,
@@ -432,6 +433,7 @@ async def change_password(
 async def request_password_reset_token(
     data: PasswordResetRequestSchema,
     db: DataBase,
+    settings: GetSettings,
 ):
     stmt = select(User).where(User.email == data.email)
     result = await db.execute(stmt)
@@ -452,21 +454,18 @@ async def request_password_reset_token(
     db.add(reset_token)
     await db.commit()
 
-    # TODO(feature/accounts-notifications): replace with celery-task
-    # reset_link = (
-    #     f"http://127.0.0.1/accounts/password-reset/complete/"
-    #     f"?email={user.email}&token={reset_token.token}"
-    # )
-    #
-    # background_tasks.add_task(
-    #     email_sender.send_password_reset_email, str(data.email), reset_link
-    # )
+    reset_link = (
+        f"{settings.SITE_URL}/accounts/password-reset/complete/"
+        f"?email={user.email}&token={reset_token.token}"
+    )
+
+    send_password_reset_email_task.d.delay(email=user.email, reset_link=reset_link)
 
     return success_message
 
 
 @router.post(
-    path="/reset-password/complete/",
+    path="/password-reset/complete/",
     response_model=MessageResponseSchema,
     summary="Complete Password Reset",
     description="Reset a user's password if a valid token is provided.",
