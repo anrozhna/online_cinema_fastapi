@@ -17,7 +17,7 @@ async def logged_in_user(client: AsyncClient, user_group, db_session: AsyncSessi
     result = await db_session.execute(
         select(User).where(User.email == "pwd-user@example.com")
     )
-    user = result.scalar()
+    user = result.scalar_one()
     user.is_active = True
     await db_session.commit()
 
@@ -93,7 +93,7 @@ class TestPasswordResetRequest:
         result = await db_session.execute(
             select(User).where(User.email == "reset-me@example.com")
         )
-        user = result.scalar()
+        user = result.scalar_one()
         user.is_active = True
         await db_session.commit()
 
@@ -127,7 +127,7 @@ class TestPasswordResetComplete:
         result = await db_session.execute(
             select(User).where(User.email == "complete-reset@example.com")
         )
-        user = result.scalar()
+        user = result.scalar_one()
         user.is_active = True
         await db_session.commit()
 
@@ -138,7 +138,7 @@ class TestPasswordResetComplete:
         result = await db_session.execute(
             select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
         )
-        reset_token = result.scalar()
+        reset_token = result.scalar_one()
 
         response = await client.post(
             "/accounts/reset-password/complete/",
@@ -166,7 +166,7 @@ class TestPasswordResetComplete:
         result = await db_session.execute(
             select(User).where(User.email == "wrong-reset-token@example.com")
         )
-        user = result.scalar()
+        user = result.scalar_one()
         user.is_active = True
         await db_session.commit()
 
@@ -190,7 +190,7 @@ class TestPasswordResetComplete:
         result = await db_session.execute(
             select(User).where(User.email == "expired-reset@example.com")
         )
-        user = result.scalar()
+        user = result.scalar_one()
         user.is_active = True
         await db_session.commit()
 
@@ -201,7 +201,7 @@ class TestPasswordResetComplete:
         result = await db_session.execute(
             select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
         )
-        reset_token = result.scalar()
+        reset_token = result.scalar_one()
         reset_token.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
         await db_session.commit()
 
@@ -230,7 +230,7 @@ class TestPasswordResetComplete:
         result = await db_session.execute(
             select(User).where(User.email == "inactive-reset@example.com")
         )
-        user = result.scalar()
+        user = result.scalar_one()
         # User is deliberately left inactive.
 
         # request_password_reset_token would never create a token for an

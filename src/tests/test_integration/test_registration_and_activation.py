@@ -34,7 +34,7 @@ class TestRegistration:
         result = await db_session.execute(
             select(User).where(User.email == "token-check@example.com")
         )
-        user = result.scalar()
+        user = result.scalar_one()
 
         result = await db_session.execute(
             select(ActivationToken).where(ActivationToken.user_id == user.id)
@@ -70,11 +70,11 @@ class TestActivation:
         result = await db_session.execute(
             select(User).where(User.email == "activate-me@example.com")
         )
-        user = result.scalar()
+        user = result.scalar_one()
         result = await db_session.execute(
             select(ActivationToken).where(ActivationToken.user_id == user.id)
         )
-        token = result.scalar()
+        token = result.scalar_one()
 
         response = await client.post(
             "/accounts/activate/",
@@ -108,11 +108,11 @@ class TestActivation:
         result = await db_session.execute(
             select(User).where(User.email == "expired@example.com")
         )
-        user = result.scalar()
+        user = result.scalar_one()
         result = await db_session.execute(
             select(ActivationToken).where(ActivationToken.user_id == user.id)
         )
-        token = result.scalar()
+        token = result.scalar_one()
         token.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
         await db_session.commit()
 
@@ -137,11 +137,11 @@ class TestActivation:
         result = await db_session.execute(
             select(User).where(User.email == "already-active@example.com")
         )
-        user = result.scalar()
+        user = result.scalar_one()
         result = await db_session.execute(
             select(ActivationToken).where(ActivationToken.user_id == user.id)
         )
-        first_token = result.scalar()
+        first_token = result.scalar_one()
 
         # First activation succeeds and deletes the token.
         await client.post(
@@ -184,11 +184,11 @@ class TestResendActivationLink:
         result = await db_session.execute(
             select(User).where(User.email == "resend@example.com")
         )
-        user = result.scalar()
+        user = result.scalar_one()
         result = await db_session.execute(
             select(ActivationToken).where(ActivationToken.user_id == user.id)
         )
-        old_token = result.scalar().token
+        old_token = result.scalar_one().token
 
         response = await client.post(
             "/accounts/activate/resend-link/", json={"email": "resend@example.com"}
