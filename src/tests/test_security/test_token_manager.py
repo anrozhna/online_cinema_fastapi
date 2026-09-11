@@ -2,14 +2,14 @@ from datetime import timedelta
 
 import pytest
 
-from config.settings import TestingSettings
+from config.settings import TestingSettings as _TestingSettings
 from exceptions.security import InvalidTokenError, TokenExpiredError
 from security.token_manager import JWTAuthManager
 
 
 @pytest.fixture()
 def jwt_manager() -> JWTAuthManager:
-    settings = TestingSettings()
+    settings = _TestingSettings()
     return JWTAuthManager(
         secret_key_access=settings.SECRET_KEY_ACCESS,
         secret_key_refresh=settings.SECRET_KEY_REFRESH,
