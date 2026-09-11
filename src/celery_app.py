@@ -18,4 +18,4 @@ celery_app.conf.update(
     enable_utc=True,
 )
 
-celery_app.autodiscover_tasks(["database"])
+celery_app.autodiscover_tasks(["notifications"])
