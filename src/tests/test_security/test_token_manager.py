@@ -32,7 +32,13 @@ class TestCreateAndDecodeAccessToken:
 
     def test_tampered_token_raises_invalid(self, jwt_manager):
         token = jwt_manager.create_access_token({"user_id": 1})
-        tampered = token[:-1] + ("a" if token[-1] != "a" else "b")
+        # Tamper a character in the middle of the signature segment,
+        # not the last character — base64's final character can have
+        # redundant padding bits that don't always affect decoded bytes.
+        middle_index = len(token) // 2
+        tampered_char = "a" if token[middle_index] != "a" else "b"
+        tampered = token[:middle_index] + tampered_char + token[middle_index + 1 :]
+
         with pytest.raises(InvalidTokenError):
             jwt_manager.decode_access_token(tampered)
 
