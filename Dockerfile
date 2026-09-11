@@ -16,6 +16,11 @@ COPY src/ ./src
 
 RUN chmod +x src/commands/run_migration.sh
 
+# Non-root user for running the app and celery workers
+RUN useradd --create-home --shell /bin/bash appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 ENTRYPOINT ["src/commands/run_migration.sh"]
