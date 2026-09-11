@@ -141,7 +141,7 @@ class TestPasswordResetComplete:
         reset_token = result.scalar_one()
 
         response = await client.post(
-            "/accounts/reset-password/complete/",
+            "/accounts/password-reset/complete/",
             json={
                 "email": "complete-reset@example.com",
                 "token": reset_token.token,
@@ -171,7 +171,7 @@ class TestPasswordResetComplete:
         await db_session.commit()
 
         response = await client.post(
-            "/accounts/reset-password/complete/",
+            "/accounts/password-reset/complete/",
             json={
                 "email": "wrong-reset-token@example.com",
                 "token": "not-the-real-token",
@@ -206,7 +206,7 @@ class TestPasswordResetComplete:
         await db_session.commit()
 
         response = await client.post(
-            "/accounts/reset-password/complete/",
+            "/accounts/password-reset/complete/",
             json={
                 "email": "expired-reset@example.com",
                 "token": reset_token.token,
@@ -242,7 +242,7 @@ class TestPasswordResetComplete:
         await db_session.commit()
 
         response = await client.post(
-            "/accounts/reset-password/complete/",
+            "/accounts/password-reset/complete/",
             json={
                 "email": "inactive-reset@example.com",
                 "token": reset_token.token,

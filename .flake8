@@ -18,3 +18,4 @@ per-file-ignores =
     src/database/migrations/env.py: F401, F403
     src/database/migrations/versions/*.py:F401, F403, E501, E122, E128
     src/routes/__init__.py:F401
+    src/config/dependencies.py: E501

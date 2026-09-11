@@ -1,14 +1,11 @@
-from datetime import datetime, timedelta, timezone
-from typing import Annotated
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from config.dependencies import CurrentUser, get_db, get_jwt_auth_manager, get_settings
-from config.settings import BaseAppSettings
+from config.dependencies import CurrentUser, DataBase, GetSettings, JWTManager
 from database.models.accounts import (
     ActivationToken,
     PasswordResetToken,
@@ -18,6 +15,12 @@ from database.models.accounts import (
     UserGroupEnum,
 )
 from exceptions.security import BaseSecurityError
+from notifications.tasks import (
+    send_activation_complete_email_task,
+    send_activation_email_task,
+    send_password_reset_complete_email_task,
+    send_password_reset_email_task,
+)
 from schemas.accounts import (
     LogoutRequestSchema,
     MessageResponseSchema,
@@ -33,11 +36,8 @@ from schemas.accounts import (
     UserRegistrationRequestSchema,
     UserRegistrationResponseSchema,
 )
-from security.interfaces import JWTAuthManagerInterface
-from security.utils import generate_secure_token
 
 router = APIRouter()
-DB = Annotated[AsyncSession, Depends(get_db)]
 
 
 @router.post(
@@ -54,7 +54,8 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 )
 async def register_user(
     user_data: UserRegistrationRequestSchema,
-    db: DB,
+    db: DataBase,
+    settings: GetSettings,
 ):
     stmt = select(User).where(User.email == user_data.email)
     result = await db.execute(stmt)
@@ -97,6 +98,13 @@ async def register_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred during user creation.",
         )
+    else:
+        activation_link = (
+            f"{settings.SITE_URL}/accounts/activate/"
+            f"?email={new_user.email}&token={activation_token.token}"
+        )
+
+        send_activation_email_task.delay(str(user_data.email), activation_link)
 
     return new_user
 
@@ -117,7 +125,8 @@ async def register_user(
 )
 async def activate_account(
     activation_data: UserActivationRequestSchema,
-    db: DB,
+    db: DataBase,
+    settings: GetSettings,
 ):
     stmt = (
         select(ActivationToken)
@@ -158,6 +167,10 @@ async def activate_account(
     await db.delete(activation_token)
     await db.commit()
 
+    login_link = f"{settings.SITE_URL}/accounts/login/"
+
+    send_activation_complete_email_task.delay(str(activation_data.email), login_link)
+
     return MessageResponseSchema(message="User account activated successfully.")
 
 
@@ -174,7 +187,8 @@ async def activate_account(
 )
 async def resend_activation_link(
     request_data: UserActivationResendRequestSchema,
-    db: DB,
+    db: DataBase,
+    settings: GetSettings,
 ):
     stmt = (
         select(User)
@@ -196,16 +210,16 @@ async def resend_activation_link(
         await db.delete(user.activation_token)
         await db.flush()
 
-    new_token = ActivationToken(
-        user_id=user.id,
-        token=generate_secure_token(),
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
-    )
+    new_token = ActivationToken(user_id=user.id)
     db.add(new_token)
     await db.commit()
 
-    # TODO(feature/accounts-notifications): replace with celery-task
-    # send_activation_email_task.delay(user.email, new_token.token)
+    activation_link = (
+        f"{settings.SITE_URL}/accounts/activate/"
+        f"?email={user.email}&token={new_token.token}"
+    )
+
+    send_activation_email_task.delay(str(request_data.email), activation_link)
 
     return generic_response
 
@@ -224,9 +238,9 @@ async def resend_activation_link(
 )
 async def login(
     login_data: UserLoginRequestSchema,
-    db: DB,
-    settings: BaseAppSettings = Depends(get_settings),
-    jwt_manager: JWTAuthManagerInterface = Depends(get_jwt_auth_manager),
+    db: DataBase,
+    settings: GetSettings,
+    jwt_manager: JWTManager,
 ):
     stmt = select(User).where(User.email == login_data.email)
     result = await db.execute(stmt)
@@ -287,8 +301,8 @@ async def login(
 )
 async def accounts_refresh(
     token_data: TokenRefreshRequestSchema,
-    db: DB,
-    jwt_manager: JWTAuthManagerInterface = Depends(get_jwt_auth_manager),
+    db: DataBase,
+    jwt_manager: JWTManager,
 ):
     try:
         decoded_refresh_token = jwt_manager.decode_refresh_token(
@@ -339,7 +353,7 @@ async def accounts_refresh(
 )
 async def logout(
     logout_data: LogoutRequestSchema,
-    db: DB,
+    db: DataBase,
 ):
     stmt = select(RefreshToken).where(RefreshToken.token == logout_data.refresh_token)
     result = await db.execute(stmt)
@@ -377,7 +391,7 @@ async def logout(
 )
 async def change_password(
     password_data: PasswordChangeRequestSchema,
-    db: DB,
+    db: DataBase,
     current_user: CurrentUser,
 ):
     if not current_user.verify_password(raw_password=password_data.old_password):
@@ -417,7 +431,8 @@ async def change_password(
 )
 async def request_password_reset_token(
     data: PasswordResetRequestSchema,
-    db: DB,
+    db: DataBase,
+    settings: GetSettings,
 ):
     stmt = select(User).where(User.email == data.email)
     result = await db.execute(stmt)
@@ -438,21 +453,18 @@ async def request_password_reset_token(
     db.add(reset_token)
     await db.commit()
 
-    # TODO(feature/accounts-notifications): replace with celery-task
-    # reset_link = (
-    #     f"http://127.0.0.1/accounts/password-reset/complete/"
-    #     f"?email={user.email}&token={reset_token.token}"
-    # )
-    #
-    # background_tasks.add_task(
-    #     email_sender.send_password_reset_email, str(data.email), reset_link
-    # )
+    reset_link = (
+        f"{settings.SITE_URL}/accounts/password-reset/complete/"
+        f"?email={user.email}&token={reset_token.token}"
+    )
+
+    send_password_reset_email_task.delay(email=user.email, reset_link=reset_link)
 
     return success_message
 
 
 @router.post(
-    path="/reset-password/complete/",
+    path="/password-reset/complete/",
     response_model=MessageResponseSchema,
     summary="Complete Password Reset",
     description="Reset a user's password if a valid token is provided.",
@@ -470,7 +482,8 @@ async def request_password_reset_token(
 )
 async def reset_password(
     data: PasswordResetCompleteRequestSchema,
-    db: DB,
+    db: DataBase,
+    settings: GetSettings,
 ):
     stmt = select(User).where(User.email == data.email)
     result = await db.execute(stmt)
@@ -506,12 +519,6 @@ async def reset_password(
         await db.delete(reset_token)
         await db.commit()
 
-    except ValueError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)
-        )
-
     except SQLAlchemyError:
         await db.rollback()
         raise HTTPException(
@@ -519,11 +526,10 @@ async def reset_password(
             detail="An error occurred while resetting the password.",
         )
 
-    # TODO(feature/accounts-notifications): replace with celery-task
-    # login_link = "http://127.0.0.1/accounts/login/"
-    #
-    # background_tasks.add_task(
-    #     email_sender.send_password_reset_complete_email, str(data.email), login_link
-    # )
+    login_link = f"{settings.SITE_URL}/accounts/login/"
+
+    send_password_reset_complete_email_task.delay(
+        email=user.email, login_link=login_link
+    )
 
     return MessageResponseSchema(message="Password reset successfully.")
