@@ -15,7 +15,10 @@ from database.models.accounts import (
     UserGroupEnum,
 )
 from exceptions.security import BaseSecurityError
-from notifications.tasks import send_activation_email_task
+from notifications.tasks import (
+    send_activation_complete_email_task,
+    send_activation_email_task,
+)
 from schemas.accounts import (
     LogoutRequestSchema,
     MessageResponseSchema,
@@ -122,6 +125,7 @@ async def register_user(
 async def activate_account(
     activation_data: UserActivationRequestSchema,
     db: DataBase,
+    settings: GetSettings,
 ):
     stmt = (
         select(ActivationToken)
@@ -162,6 +166,10 @@ async def activate_account(
     await db.delete(activation_token)
     await db.commit()
 
+    login_link = f"{settings.SITE_URL}/accounts/login/"
+
+    send_activation_complete_email_task.delay(str(activation_data.email), login_link)
+
     return MessageResponseSchema(message="User account activated successfully.")
 
 
@@ -179,6 +187,7 @@ async def activate_account(
 async def resend_activation_link(
     request_data: UserActivationResendRequestSchema,
     db: DataBase,
+    settings: GetSettings,
 ):
     stmt = (
         select(User)
@@ -208,8 +217,9 @@ async def resend_activation_link(
     db.add(new_token)
     await db.commit()
 
-    # TODO(feature/accounts-notifications): replace with celery-task
-    # send_activation_email_task.delay(user.email, new_token.token)
+    login_link = f"{settings.SITE_URL}/accounts/login/"
+
+    send_activation_complete_email_task.delay(str(request_data.email), login_link)
 
     return generic_response
 
