@@ -1,14 +1,11 @@
 from datetime import datetime, timedelta, timezone
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from config.dependencies import CurrentUser, get_db, get_jwt_auth_manager, get_settings
-from config.settings import BaseAppSettings
+from config.dependencies import CurrentUser, DataBase, GetSettings, JWTManager
 from database.models.accounts import (
     ActivationToken,
     PasswordResetToken,
@@ -33,11 +30,9 @@ from schemas.accounts import (
     UserRegistrationRequestSchema,
     UserRegistrationResponseSchema,
 )
-from security.interfaces import JWTAuthManagerInterface
 from security.utils import generate_secure_token
 
 router = APIRouter()
-DB = Annotated[AsyncSession, Depends(get_db)]
 
 
 @router.post(
@@ -54,7 +49,7 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 )
 async def register_user(
     user_data: UserRegistrationRequestSchema,
-    db: DB,
+    db: DataBase,
 ):
     stmt = select(User).where(User.email == user_data.email)
     result = await db.execute(stmt)
@@ -117,7 +112,7 @@ async def register_user(
 )
 async def activate_account(
     activation_data: UserActivationRequestSchema,
-    db: DB,
+    db: DataBase,
 ):
     stmt = (
         select(ActivationToken)
@@ -174,7 +169,7 @@ async def activate_account(
 )
 async def resend_activation_link(
     request_data: UserActivationResendRequestSchema,
-    db: DB,
+    db: DataBase,
 ):
     stmt = (
         select(User)
@@ -224,9 +219,9 @@ async def resend_activation_link(
 )
 async def login(
     login_data: UserLoginRequestSchema,
-    db: DB,
-    settings: BaseAppSettings = Depends(get_settings),
-    jwt_manager: JWTAuthManagerInterface = Depends(get_jwt_auth_manager),
+    db: DataBase,
+    settings: GetSettings,
+    jwt_manager: JWTManager,
 ):
     stmt = select(User).where(User.email == login_data.email)
     result = await db.execute(stmt)
@@ -287,8 +282,8 @@ async def login(
 )
 async def accounts_refresh(
     token_data: TokenRefreshRequestSchema,
-    db: DB,
-    jwt_manager: JWTAuthManagerInterface = Depends(get_jwt_auth_manager),
+    db: DataBase,
+    jwt_manager: JWTManager,
 ):
     try:
         decoded_refresh_token = jwt_manager.decode_refresh_token(
@@ -339,7 +334,7 @@ async def accounts_refresh(
 )
 async def logout(
     logout_data: LogoutRequestSchema,
-    db: DB,
+    db: DataBase,
 ):
     stmt = select(RefreshToken).where(RefreshToken.token == logout_data.refresh_token)
     result = await db.execute(stmt)
@@ -377,7 +372,7 @@ async def logout(
 )
 async def change_password(
     password_data: PasswordChangeRequestSchema,
-    db: DB,
+    db: DataBase,
     current_user: CurrentUser,
 ):
     if not current_user.verify_password(raw_password=password_data.old_password):
@@ -417,7 +412,7 @@ async def change_password(
 )
 async def request_password_reset_token(
     data: PasswordResetRequestSchema,
-    db: DB,
+    db: DataBase,
 ):
     stmt = select(User).where(User.email == data.email)
     result = await db.execute(stmt)
@@ -470,7 +465,7 @@ async def request_password_reset_token(
 )
 async def reset_password(
     data: PasswordResetCompleteRequestSchema,
-    db: DB,
+    db: DataBase,
 ):
     stmt = select(User).where(User.email == data.email)
     result = await db.execute(stmt)

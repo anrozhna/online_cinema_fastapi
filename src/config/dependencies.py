@@ -27,10 +27,16 @@ def get_settings() -> BaseAppSettings:
     return Settings()
 
 
+GetSettings = Annotated[BaseAppSettings, Depends(get_settings)]
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency that yields a DB session and closes it after the request."""
     async with AsyncSessionLocal() as session:
         yield session
+
+
+DataBase = Annotated[AsyncSession, Depends(get_db)]
 
 
 def get_jwt_auth_manager(
@@ -44,13 +50,16 @@ def get_jwt_auth_manager(
     )
 
 
+JWTManager = Annotated[JWTAuthManagerInterface, Depends(get_jwt_auth_manager)]
+
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/accounts/login/")
 
 
 async def get_current_user(
+    db: DataBase,
+    jwt_manager: JWTManager,
     token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-    jwt_manager: JWTAuthManagerInterface = Depends(get_jwt_auth_manager),
 ) -> User:
     """Resolve the currently authenticated user from a bearer access token."""
     try:
@@ -83,7 +92,7 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 def get_accounts_email_notificator(
-    settings: BaseAppSettings = Depends(get_settings),
+    settings: GetSettings,
 ) -> EmailSenderInterface:
     """
     Retrieve an instance of the EmailSenderInterface configured with the application settings.
