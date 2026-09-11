@@ -141,19 +141,27 @@ class TestActivation:
         result = await db_session.execute(
             select(ActivationToken).where(ActivationToken.user_id == user.id)
         )
-        token = result.scalar()
+        first_token = result.scalar()
 
+        # First activation succeeds and deletes the token.
         await client.post(
             "/accounts/activate/",
-            json={"email": "already-active@example.com", "token": token.token},
+            json={"email": "already-active@example.com", "token": first_token.token},
         )
-        # Second attempt — token already deleted, so a fresh one is required
-        # to reach the "already active" branch. Re-fetch is intentional here.
+
+        # Simulate a second, stray activation token for an already-active user
+        # (e.g. from a race condition or a stale email link) to reach the
+        # "already active" branch specifically, not "token not found".
+        stray_token = ActivationToken(user_id=user.id)
+        db_session.add(stray_token)
+        await db_session.commit()
+
         response = await client.post(
             "/accounts/activate/",
-            json={"email": "already-active@example.com", "token": token.token},
+            json={"email": "already-active@example.com", "token": stray_token.token},
         )
-        assert response.status_code in (400, 404)
+        assert response.status_code == 400
+        assert "already active" in response.json()["detail"].lower()
 
 
 class TestResendActivationLink:
