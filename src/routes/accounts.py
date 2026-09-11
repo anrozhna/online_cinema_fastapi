@@ -70,6 +70,12 @@ async def register_user(
     result_group = await db.execute(stmt_group)
     user_group = result_group.scalar()
 
+    if user_group is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Default user group is not configured.",
+        )
+
     try:
         new_user = User.create(
             email=user_data.email,
