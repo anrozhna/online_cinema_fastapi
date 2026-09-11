@@ -1,5 +1,7 @@
 from collections.abc import AsyncGenerator
+from unittest.mock import patch
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -63,3 +65,10 @@ async def client(db_session: AsyncSession):
         yield ac
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def mock_celery_tasks():
+    """Автоматично мокає метод .delay() для всіх Celery тасок у тестах."""
+    with patch("celery.app.task.Task.delay") as mock_delay:
+        yield mock_delay
