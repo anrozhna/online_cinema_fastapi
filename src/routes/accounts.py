@@ -385,13 +385,8 @@ async def change_password(
             detail="New password must be different from the old password.",
         )
 
-    try:
-        current_user.password = password_data.new_password
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(e),
-        )
+    current_user.password = password_data.new_password
+
     await db.commit()
 
     return MessageResponseSchema(message="Password changed successfully.")
