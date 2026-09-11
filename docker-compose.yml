@@ -31,5 +31,55 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: online-cinema-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: online-cinema-celery-worker
+    entrypoint: [ ]
+    command: celery -A celery_app worker --loglevel=info
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+    working_dir: /app/src
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: online-cinema-celery-beat
+    entrypoint: [ ]
+    command: poetry run celery -A celery_app beat --loglevel=info -s /tmp/celerybeat-schedule
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+    working_dir: /app/src
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  redis_data:

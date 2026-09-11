@@ -15,6 +15,6 @@ exclude =
 per-file-ignores =
     src/database/__init__.py:F401
     src/database/models/__init__.py:F401
-    src/migrations/env.py:F401
-    src/database/migrations/versions/*.py:F401
+    src/database/migrations/env.py: F401, F403
+    src/database/migrations/versions/*.py:F401, F403, E501, E122, E128
     src/routes/__init__.py:F401
