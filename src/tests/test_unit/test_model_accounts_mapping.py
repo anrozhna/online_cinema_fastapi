@@ -9,6 +9,7 @@ PostgreSQL-specific behavior (e.g. real Enum types, timezone-aware
 server defaults).
 """
 
+from collections.abc import Generator
 from datetime import datetime, timezone
 
 import pytest
@@ -39,7 +40,7 @@ def engine():
 
 
 @pytest.fixture()
-def session(engine) -> Session:
+def session(engine) -> Generator[Session, None, None]:
     session_factory = sessionmaker(bind=engine)
     session = session_factory()
     yield session

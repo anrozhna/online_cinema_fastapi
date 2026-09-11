@@ -15,7 +15,7 @@ async def activated_user(client: AsyncClient, user_group, db_session: AsyncSessi
     result = await db_session.execute(
         select(User).where(User.email == "login-user@example.com")
     )
-    user = result.scalar()
+    user = result.scalar_one()
     user.is_active = True
     await db_session.commit()
     return user

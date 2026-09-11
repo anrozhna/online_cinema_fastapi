@@ -60,3 +60,8 @@ concurrency = ["greenlet"]
 
 [tool.coverage.report]
 omit = ["src/tests/*", "src/database/seed.py"]
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+disallow_untyped_defs = false
