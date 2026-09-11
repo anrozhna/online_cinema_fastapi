@@ -381,7 +381,7 @@ async def change_password(
 
     if current_user.verify_password(raw_password=password_data.new_password):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="New password must be different from the old password.",
         )
 
@@ -389,7 +389,7 @@ async def change_password(
         current_user.password = password_data.new_password
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(e),
         )
     await db.commit()
