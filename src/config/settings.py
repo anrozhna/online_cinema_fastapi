@@ -30,6 +30,8 @@ class BaseAppSettings(BaseSettings):
     EMAIL_USE_TLS: bool = os.getenv("EMAIL_USE_TLS", "False").lower() == "true"
     MAILHOG_API_PORT: int = int(os.getenv("MAILHOG_API_PORT", 8025))
 
+    SITE_URL: str = os.getenv("SITE_URL", "http://127.0.0.1:8000")
+
 
 class Settings(BaseAppSettings):
     """Settings for local development, Docker, and production."""

@@ -15,6 +15,7 @@ from database.models.accounts import (
     UserGroupEnum,
 )
 from exceptions.security import BaseSecurityError
+from notifications.tasks import send_activation_email_task
 from schemas.accounts import (
     LogoutRequestSchema,
     MessageResponseSchema,
@@ -50,6 +51,7 @@ router = APIRouter()
 async def register_user(
     user_data: UserRegistrationRequestSchema,
     db: DataBase,
+    settings: GetSettings,
 ):
     stmt = select(User).where(User.email == user_data.email)
     result = await db.execute(stmt)
@@ -92,6 +94,13 @@ async def register_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred during user creation.",
         )
+    else:
+        activation_link = (
+            f"{settings.SITE_URL}/accounts/activate/"
+            f"?email={new_user.email}&token={activation_token.token}"
+        )
+
+        send_activation_email_task.delay(str(user_data.email), activation_link)
 
     return new_user
 
