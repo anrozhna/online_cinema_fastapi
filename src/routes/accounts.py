@@ -458,7 +458,7 @@ async def request_password_reset_token(
         f"?email={user.email}&token={reset_token.token}"
     )
 
-    send_password_reset_email_task.d.delay(email=user.email, reset_link=reset_link)
+    send_password_reset_email_task.delay(email=user.email, reset_link=reset_link)
 
     return success_message
 
@@ -534,7 +534,7 @@ async def reset_password(
 
     login_link = f"{settings.SITE_URL}/accounts/login/"
 
-    send_password_reset_complete_email_task.d.delay(
+    send_password_reset_complete_email_task.delay(
         email=user.email, login_link=login_link
     )
 
