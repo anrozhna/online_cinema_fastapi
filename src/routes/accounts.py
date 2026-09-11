@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import delete, select
@@ -18,6 +18,7 @@ from exceptions.security import BaseSecurityError
 from notifications.tasks import (
     send_activation_complete_email_task,
     send_activation_email_task,
+    send_password_reset_complete_email_task,
     send_password_reset_email_task,
 )
 from schemas.accounts import (
@@ -35,7 +36,6 @@ from schemas.accounts import (
     UserRegistrationRequestSchema,
     UserRegistrationResponseSchema,
 )
-from security.utils import generate_secure_token
 
 router = APIRouter()
 
@@ -210,17 +210,16 @@ async def resend_activation_link(
         await db.delete(user.activation_token)
         await db.flush()
 
-    new_token = ActivationToken(
-        user_id=user.id,
-        token=generate_secure_token(),
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
-    )
+    new_token = ActivationToken(user_id=user.id)
     db.add(new_token)
     await db.commit()
 
-    login_link = f"{settings.SITE_URL}/accounts/login/"
+    activation_link = (
+        f"{settings.SITE_URL}/accounts/activate/"
+        f"?email={user.email}&token={new_token.token}"
+    )
 
-    send_activation_complete_email_task.delay(str(request_data.email), login_link)
+    send_activation_email_task.delay(str(request_data.email), activation_link)
 
     return generic_response
 
@@ -484,6 +483,7 @@ async def request_password_reset_token(
 async def reset_password(
     data: PasswordResetCompleteRequestSchema,
     db: DataBase,
+    settings: GetSettings,
 ):
     stmt = select(User).where(User.email == data.email)
     result = await db.execute(stmt)
@@ -532,11 +532,10 @@ async def reset_password(
             detail="An error occurred while resetting the password.",
         )
 
-    # TODO(feature/accounts-notifications): replace with celery-task
-    # login_link = "http://127.0.0.1/accounts/login/"
-    #
-    # background_tasks.add_task(
-    #     email_sender.send_password_reset_complete_email, str(data.email), login_link
-    # )
+    login_link = f"{settings.SITE_URL}/accounts/login/"
+
+    send_password_reset_complete_email_task.d.delay(
+        email=user.email, login_link=login_link
+    )
 
     return MessageResponseSchema(message="Password reset successfully.")
