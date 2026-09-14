@@ -16,6 +16,8 @@ from notifications.emails import EmailSender
 from notifications.interfaces import EmailSenderInterface
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
+from storages.interfaces import S3StorageInterface
+from storages.s3 import S3StorageClient
 
 
 @lru_cache
@@ -125,3 +127,10 @@ def get_accounts_email_notificator(
 AccountsNotifier = Annotated[
     EmailSenderInterface, Depends(get_accounts_email_notificator)
 ]
+
+
+def get_s3_storage(settings: Settings = Depends(get_settings)) -> S3StorageInterface:
+    return S3StorageClient(settings=settings)
+
+
+S3Storage = Annotated[S3StorageInterface, Depends(get_s3_storage)]

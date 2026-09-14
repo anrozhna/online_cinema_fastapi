@@ -49,6 +49,17 @@ class Settings(BaseAppSettings):
     REDIS_HOST: str = os.getenv("REDIS_HOST", "redis")
     REDIS_PORT: int = int(os.getenv("REDIS_PORT", 6379))
 
+    S3_STORAGE_HOST: str = os.getenv("S3_STORAGE_HOST", "minio")
+    S3_STORAGE_PORT: int = int(os.getenv("S3_STORAGE_PORT", 9000))
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "online-cinema-storage")
+    MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
+    MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin123")
+
+    @property
+    def s3_endpoint_url(self) -> str:
+        """S3-compatible endpoint (MinIO locally, real AWS S3 URL in production)."""
+        return f"http://{self.S3_STORAGE_HOST}:{self.S3_STORAGE_PORT}"
+
     @property
     def redis_url(self) -> str:
         """Connection string used as both Celery broker and result backend."""
