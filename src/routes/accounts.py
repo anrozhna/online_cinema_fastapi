@@ -13,6 +13,7 @@ from database.models.accounts import (
     User,
     UserGroup,
     UserGroupEnum,
+    UserProfile,
 )
 from exceptions.security import BaseSecurityError
 from notifications.tasks import (
@@ -89,6 +90,9 @@ async def register_user(
 
         activation_token = ActivationToken(user_id=new_user.id)
         db.add(activation_token)
+
+        profile = UserProfile(user_id=new_user.id)
+        db.add(profile)
 
         await db.commit()
         await db.refresh(new_user)
