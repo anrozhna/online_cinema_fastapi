@@ -70,15 +70,24 @@ class UserProfileRequestSchema(UserProfileBaseSchema):
         info: str | None = Form(None),
         avatar: UploadFile | None = File(None),
     ) -> "UserProfileRequestSchema":
+        raw_data = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "gender": gender,
+            "date_of_birth": date_of_birth,
+            "info": info,
+            "avatar": avatar,
+        }
+        # Only pass fields the client actually sent — anything left as None here
+        # (i.e. omitted from the multipart form) must stay untouched by PATCH,
+        # not be explicitly set to None on the model.
+        provided_data = {
+            key: value for key, value in raw_data.items() if value is not None
+        }
+
         try:
-            return cls(
-                first_name=first_name,
-                last_name=last_name,
-                gender=gender,
-                date_of_birth=date_of_birth,
-                info=info,
-                avatar=avatar,
-            )
+            # mypy can't verify **kwargs against named Pydantic fields
+            return cls(**provided_data)  # type: ignore[arg-type]
         except ValidationError as error:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
