@@ -7,11 +7,19 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from config.dependencies import get_db, get_settings
+from config.dependencies import get_current_user, get_db, get_s3_storage, get_settings
 from config.settings import TestingSettings
-from database.models.accounts import UserGroup, UserGroupEnum
+from database.models.accounts import (
+    GenderEnum,
+    User,
+    UserGroup,
+    UserGroupEnum,
+    UserProfile,
+)
 from database.models.base import Base
+from exceptions.storage import S3FileUploadError
 from main import app
+from storages.interfaces import S3StorageInterface
 
 
 @pytest_asyncio.fixture()
@@ -72,3 +80,81 @@ def mock_celery_tasks():
     """Автоматично мокає метод .delay() для всіх Celery тасок у тестах."""
     with patch("celery.app.task.Task.delay") as mock_delay:
         yield mock_delay
+
+
+class FakeS3Storage(S3StorageInterface):
+    """In-memory stand-in for S3StorageClient — no real network calls in tests."""
+
+    def __init__(self) -> None:
+        self.uploaded: dict[str, bytes] = {}
+        self.should_fail = False
+
+    async def upload_file(self, file_data: bytes, file_name: str) -> str:
+        if self.should_fail:
+            raise S3FileUploadError("Simulated upload failure.")
+        self.uploaded[file_name] = file_data
+        return await self.get_file_url(file_name)
+
+    async def get_file_url(self, file_name: str) -> str:
+        return f"http://fake-s3.local/test-bucket/{file_name}"
+
+    async def delete_file(self, file_name: str) -> None:
+        self.uploaded.pop(file_name, None)
+
+
+@pytest_asyncio.fixture()
+async def fake_storage() -> FakeS3Storage:
+    return FakeS3Storage()
+
+
+@pytest_asyncio.fixture()
+async def active_user(db_session: AsyncSession, user_group: UserGroup) -> User:
+    user = User.create(
+        email="owner@example.com",
+        raw_password="StrongP@ssw0rd!",
+        group_id=user_group.id,
+    )
+    user.is_active = True
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture()
+async def other_user(db_session: AsyncSession, user_group: UserGroup) -> User:
+    user = User.create(
+        email="other@example.com",
+        raw_password="StrongP@ssw0rd!",
+        group_id=user_group.id,
+    )
+    user.is_active = True
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture()
+async def user_profile(db_session: AsyncSession, active_user: User) -> UserProfile:
+    profile = UserProfile(
+        user_id=active_user.id,
+        first_name="Test",
+        last_name="User",
+        gender=GenderEnum.WOMAN,
+        info="Test bio",
+    )
+    db_session.add(profile)
+    await db_session.commit()
+    await db_session.refresh(profile)
+    return profile
+
+
+@pytest_asyncio.fixture()
+async def authenticated_client(client, active_user: User, fake_storage: FakeS3Storage):
+    """Same AsyncClient as `client`, but requests are authenticated as active_user."""
+    app.dependency_overrides[get_current_user] = lambda: active_user
+    app.dependency_overrides[get_s3_storage] = lambda: fake_storage
+    yield client
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_s3_storage, None)
