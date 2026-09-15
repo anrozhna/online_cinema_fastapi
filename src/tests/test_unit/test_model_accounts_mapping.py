@@ -201,8 +201,8 @@ class TestUserProfile:
 
         profile = UserProfile(
             user_id=user.id,
-            first_name="Anna",
-            last_name="Lepiska",
+            first_name="Test",
+            last_name="User",
             gender=GenderEnum.WOMAN,
             info="Short bio",
         )
@@ -210,7 +210,7 @@ class TestUserProfile:
         session.commit()
 
         assert profile.user.email == "profile@example.com"
-        assert user.profile.first_name == "Anna"
+        assert user.profile.first_name == "Test"
 
     def test_profile_user_id_must_be_unique(self, session, user_group):
         user = User.create(

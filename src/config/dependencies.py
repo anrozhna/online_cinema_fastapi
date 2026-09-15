@@ -134,3 +134,13 @@ def get_s3_storage(settings: Settings = Depends(get_settings)) -> S3StorageInter
 
 
 S3Storage = Annotated[S3StorageInterface, Depends(get_s3_storage)]
+
+
+def verify_profile_owner(user_id: int, current_user: CurrentUser) -> int:
+    """FastAPI dependency to ensure the current user owns the profile being modified."""
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to edit this profile.",
+        )
+    return user_id
