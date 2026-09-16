@@ -1,9 +1,9 @@
 from typing import Generic, TypeVar
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models.base import Base
+from database.session import DataBase
 
 ModelType = TypeVar("ModelType", bound=Base)
 
@@ -18,7 +18,7 @@ class BaseRepository(Generic[ModelType]):
 
     model: type[ModelType]
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: DataBase):
         self.db = db
 
     async def get_by_id(self, record_id: int) -> ModelType | None:
