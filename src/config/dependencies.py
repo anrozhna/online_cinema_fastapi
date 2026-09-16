@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import BaseAppSettings, Settings, TestingSettings
-from database.models.accounts import User
+from database.models.accounts import User, UserGroupEnum
 from database.session import AsyncSessionLocal
 from exceptions.security import BaseSecurityError
 from notifications.emails import EmailSender
@@ -144,3 +144,16 @@ def verify_profile_owner(user_id: int, current_user: CurrentUser) -> int:
             detail="You don't have permission to edit this profile.",
         )
     return user_id
+
+
+def require_admin(current_user: CurrentUser) -> User:
+    """FastAPI dependency to restrict an endpoint to users in the ADMIN group."""
+    if not current_user.has_group(UserGroupEnum.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required.",
+        )
+    return current_user
+
+
+AdminUser = Annotated[User, Depends(require_admin)]

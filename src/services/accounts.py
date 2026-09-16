@@ -33,6 +33,8 @@ from schemas.accounts import (
     TokenRefreshResponseSchema,
     UserActivationRequestSchema,
     UserActivationResendRequestSchema,
+    UserGroupUpdateRequestSchema,
+    UserGroupUpdateResponseSchema,
     UserLoginRequestSchema,
     UserLoginResponseSchema,
     UserRegistrationRequestSchema,
@@ -69,10 +71,21 @@ class AccountsService:
                 detail="User not found or not active.",
             )
 
-    async def get_default_user_group(self) -> UserGroup | None:
-        stmt = select(UserGroup).where(UserGroup.name == UserGroupEnum.USER)
+    async def get_user_group_by_name_or_500(
+        self, group_name: UserGroupEnum
+    ) -> UserGroup | None:
+        stmt = select(UserGroup).where(UserGroup.name == group_name)
         result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
+        user_group = result.scalar_one_or_none()
+        if user_group is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Requested user group is not configured.",
+            )
+        return user_group
+
+    async def get_default_user_group(self) -> UserGroup | None:
+        return await self.get_user_group_by_name_or_500(UserGroupEnum.USER)
 
     async def get_activation_token_by_user_id(
         self, user_id: int
@@ -159,11 +172,7 @@ class AccountsService:
             )
 
         user_group = await self.get_default_user_group()
-        if user_group is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Default user group is not configured.",
-            )
+        assert user_group is not None
 
         new_user = User.create(
             email=user_data.email,
@@ -399,6 +408,49 @@ class AccountsService:
         )
 
         return MessageResponseSchema(message="Password reset successfully.")
+
+    async def change_user_group(
+        self, user_id: int, group_data: UserGroupUpdateRequestSchema
+    ) -> UserGroupUpdateResponseSchema:
+        user = await self.get_user_by_id(user_id)
+        self.raise_404_if_user_is_none_or_not_active(user)
+        assert user is not None
+
+        user_group = await self.get_user_group_by_name_or_500(group_data.group)
+        assert user_group is not None
+
+        user.group_id = user_group.id
+        await self.commit_or_raise_500(
+            "An error occurred while updating the user group."
+        )
+        await self.db.refresh(user)
+
+        return UserGroupUpdateResponseSchema(
+            user_id=user.id, email=user.email, group=group_data.group
+        )
+
+    async def activate_user_manually(self, user_id: int) -> MessageResponseSchema:
+        user = await self.get_user_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+            )
+
+        if user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User account is already active.",
+            )
+
+        user.is_active = True
+
+        activation_token = await self.get_activation_token_by_user_id(user_id)
+        if activation_token:
+            await self.db.delete(activation_token)
+
+        await self.commit_or_raise_500("An error occurred while activating the user.")
+
+        return MessageResponseSchema(message="User account activated successfully.")
 
 
 AccountServiceDep = Annotated[AccountsService, Depends()]

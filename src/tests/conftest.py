@@ -158,3 +158,47 @@ async def authenticated_client(client, active_user: User, fake_storage: FakeS3St
     yield client
     app.dependency_overrides.pop(get_current_user, None)
     app.dependency_overrides.pop(get_s3_storage, None)
+
+
+@pytest_asyncio.fixture()
+async def admin_group(db_session: AsyncSession) -> UserGroup:
+    group = UserGroup(name=UserGroupEnum.ADMIN)
+    db_session.add(group)
+    await db_session.commit()
+    await db_session.refresh(group)
+    return group
+
+
+@pytest_asyncio.fixture()
+async def moderator_group(db_session: AsyncSession) -> UserGroup:
+    group = UserGroup(name=UserGroupEnum.MODERATOR)
+    db_session.add(group)
+    await db_session.commit()
+    await db_session.refresh(group)
+    return group
+
+
+@pytest_asyncio.fixture()
+async def admin_user(db_session: AsyncSession, admin_group: UserGroup) -> User:
+    user = User.create(
+        email="admin@example.com",
+        raw_password="StrongP@ssw0rd!",
+        group_id=admin_group.id,
+    )
+    user.is_active = True
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture()
+async def authenticated_admin_client(
+    client, admin_user: User, fake_storage: FakeS3Storage
+):
+    """Same AsyncClient as `client`, but requests are authenticated as admin_user."""
+    app.dependency_overrides[get_current_user] = lambda: admin_user
+    app.dependency_overrides[get_s3_storage] = lambda: fake_storage
+    yield client
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_s3_storage, None)
