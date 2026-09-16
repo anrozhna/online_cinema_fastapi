@@ -2,17 +2,23 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
-from sqlalchemy import delete, select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import joinedload
 
-from config.dependencies import DataBase, GetSettings, JWTManager
+from config.dependencies import (
+    ActivationTokenRepo,
+    GetSettings,
+    JWTManager,
+    PasswordResetTokenRepo,
+    ProfileRepo,
+    RefreshTokenRepo,
+    UserGroupRepo,
+    UserRepo,
+)
 from database.models.accounts import (
     ActivationToken,
     PasswordResetToken,
     RefreshToken,
     User,
-    UserGroup,
     UserGroupEnum,
     UserProfile,
 )
@@ -44,78 +50,35 @@ from schemas.accounts import (
 class AccountsService:
     def __init__(
         self,
-        db: DataBase,
         settings: GetSettings,
         jwt_manager: JWTManager,
+        user_repo: UserRepo,
+        user_group_repo: UserGroupRepo,
+        activation_token_repo: ActivationTokenRepo,
+        password_reset_token_repo: PasswordResetTokenRepo,
+        refresh_token_repo: RefreshTokenRepo,
+        profile_repo: ProfileRepo,
     ):
-        self.db = db
         self.settings = settings
         self.jwt_manager = jwt_manager
-
-    async def get_user_by_id(self, user_id: int) -> User | None:
-        stmt = select(User).where(User.id == user_id)
-        result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def get_user_by_email(self, email) -> User | None:
-        stmt = select(User).where(User.email == email)
-        result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
+        self.user_repo = user_repo
+        self.user_group_repo = user_group_repo
+        self.activation_token_repo = activation_token_repo
+        self.password_reset_token_repo = password_reset_token_repo
+        self.refresh_token_repo = refresh_token_repo
+        self.profile_repo = profile_repo
+        # db needed for commit/rollback and flush — repositories own the queries
+        self.db = user_repo.db
 
     @staticmethod
     def raise_404_if_user_is_none_or_not_active(user: User | None) -> None:
-        """Guarantee the given user exists and is active, or raise 404."""
         if user is None or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found or not active.",
             )
 
-    async def get_user_group_by_name_or_500(
-        self, group_name: UserGroupEnum
-    ) -> UserGroup | None:
-        stmt = select(UserGroup).where(UserGroup.name == group_name)
-        result = await self.db.execute(stmt)
-        user_group = result.scalar_one_or_none()
-        if user_group is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Requested user group is not configured.",
-            )
-        return user_group
-
-    async def get_default_user_group(self) -> UserGroup | None:
-        return await self.get_user_group_by_name_or_500(UserGroupEnum.USER)
-
-    async def get_activation_token_by_user_id(
-        self, user_id: int
-    ) -> ActivationToken | None:
-        stmt = select(ActivationToken).where(ActivationToken.user_id == user_id)
-        result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def get_password_reset_token_by_user_id(
-        self, user_id: int
-    ) -> PasswordResetToken | None:
-        stmt = select(PasswordResetToken).where(PasswordResetToken.user_id == user_id)
-        result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def get_refresh_token_or_401(self, token: str) -> RefreshToken:
-        stmt = select(RefreshToken).where(RefreshToken.token == token)
-        result = await self.db.execute(stmt)
-        refresh_token = result.scalar_one_or_none()
-
-        if not refresh_token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token.",
-            )
-        return refresh_token
-
     async def commit_or_raise_500(self, error_detail: str) -> None:
-        """Commit the current transaction; on failure,
-        rollback and raise a clean 500."""
         try:
             await self.db.commit()
         except SQLAlchemyError:
@@ -142,49 +105,35 @@ class AccountsService:
             await self.db.delete(token)
             await self.db.commit()
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_detail,
+                status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail
             )
 
-    async def replace_activation_token(self, user_id: int) -> ActivationToken:
-        existing = await self.get_activation_token_by_user_id(user_id)
-        if existing:
-            await self.db.delete(existing)
-            await self.db.flush()
-        new_token = ActivationToken(user_id=user_id)
-        self.db.add(new_token)
-        return new_token
-
-    async def replace_password_reset_token(self, user_id: int) -> PasswordResetToken:
-        await self.db.execute(
-            delete(PasswordResetToken).where(PasswordResetToken.user_id == user_id)
-        )
-        new_token = PasswordResetToken(user_id=user_id)
-        self.db.add(new_token)
-        return new_token
-
     async def register_user(self, user_data: UserRegistrationRequestSchema) -> User:
-        existing_user = await self.get_user_by_email(user_data.email)
+        existing_user = await self.user_repo.get_by_email(user_data.email)
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"User with this email {user_data.email} already exists.",
             )
 
-        user_group = await self.get_default_user_group()
-        assert user_group is not None
+        user_group = await self.user_group_repo.get_by_name(UserGroupEnum.USER)
+        if user_group is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Default user group is not configured.",
+            )
 
         new_user = User.create(
             email=user_data.email,
             raw_password=user_data.password,
             group_id=user_group.id,
         )
-        self.db.add(new_user)
+        self.user_repo.add(new_user)
         await self.db.flush()
 
         activation_token = ActivationToken(user_id=new_user.id)
-        self.db.add(activation_token)
-        self.db.add(UserProfile(user_id=new_user.id))
+        self.activation_token_repo.add(activation_token)
+        self.profile_repo.add(UserProfile(user_id=new_user.id))
 
         await self.commit_or_raise_500("An error occurred during user creation.")
         await self.db.refresh(new_user)
@@ -200,18 +149,9 @@ class AccountsService:
     async def activate_account(
         self, activation_data: UserActivationRequestSchema
     ) -> MessageResponseSchema:
-        stmt = (
-            select(ActivationToken)
-            .options(joinedload(ActivationToken.user))
-            .join(User)
-            .where(
-                User.email == activation_data.email,
-                ActivationToken.token == activation_data.token,
-            )
+        activation_token = await self.activation_token_repo.get_by_email_and_token(
+            activation_data.email, activation_data.token
         )
-        result = await self.db.execute(stmt)
-        activation_token = result.scalars().first()
-
         if not activation_token:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -222,7 +162,7 @@ class AccountsService:
             activation_token, "Invalid or expired activation token."
         )
 
-        user = activation_token.user
+        user = activation_token.user  # eager-loaded via joinedload in the repository
         if user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -230,7 +170,7 @@ class AccountsService:
             )
 
         user.is_active = True
-        await self.db.delete(activation_token)
+        await self.activation_token_repo.delete(activation_token)
         await self.db.commit()
 
         login_link = f"{self.settings.SITE_URL}/accounts/login/"
@@ -243,7 +183,7 @@ class AccountsService:
     async def resend_activation_link(
         self, request_data: UserActivationResendRequestSchema
     ) -> MessageResponseSchema:
-        user = await self.get_user_by_email(request_data.email)
+        user = await self.user_repo.get_by_email(request_data.email)
 
         generic_response = MessageResponseSchema(
             message="If the account exists and is not active, "
@@ -253,7 +193,13 @@ class AccountsService:
         if not user or user.is_active:
             return generic_response
 
-        new_token = await self.replace_activation_token(user.id)
+        existing = await self.activation_token_repo.get_by_user_id(user.id)
+        if existing:
+            await self.activation_token_repo.delete(existing)
+            await self.db.flush()
+
+        new_token = ActivationToken(user_id=user.id)
+        self.activation_token_repo.add(new_token)
         await self.db.commit()
 
         activation_link = (
@@ -267,7 +213,7 @@ class AccountsService:
     async def login(
         self, login_data: UserLoginRequestSchema
     ) -> UserLoginResponseSchema:
-        user = await self.get_user_by_email(login_data.email)
+        user = await self.user_repo.get_by_email(login_data.email)
         if not user or not user.verify_password(raw_password=login_data.password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -288,7 +234,7 @@ class AccountsService:
             days_valid=self.settings.LOGIN_TIME_DAYS,
             token=refresh_token,
         )
-        self.db.add(refresh_token_record)
+        self.refresh_token_repo.add(refresh_token_record)
         await self.commit_or_raise_500(
             "An error occurred while processing the request."
         )
@@ -310,14 +256,22 @@ class AccountsService:
             )
 
         user_id = decoded_refresh_token.get("user_id")
-        refresh_token = await self.get_refresh_token_or_401(token_data.refresh_token)
+
+        refresh_token = await self.refresh_token_repo.get_by_token(
+            token_data.refresh_token
+        )
+        if not refresh_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token.",
+            )
 
         if not user_id or user_id != refresh_token.user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid refresh token."
             )
 
-        user = await self.get_user_by_id(refresh_token.user_id)
+        user = await self.user_repo.get_by_id(refresh_token.user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
@@ -327,9 +281,16 @@ class AccountsService:
         return TokenRefreshResponseSchema(access_token=new_access_token)
 
     async def logout(self, logout_data: LogoutRequestSchema) -> MessageResponseSchema:
-        refresh_token = await self.get_refresh_token_or_401(logout_data.refresh_token)
+        refresh_token = await self.refresh_token_repo.get_by_token(
+            logout_data.refresh_token
+        )
+        if not refresh_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token.",
+            )
 
-        await self.db.delete(refresh_token)
+        await self.refresh_token_repo.delete(refresh_token)
         await self.db.commit()
 
         return MessageResponseSchema(message="User logged out successfully.")
@@ -356,7 +317,7 @@ class AccountsService:
     async def request_password_reset_token(
         self, data: PasswordResetRequestSchema
     ) -> MessageResponseSchema:
-        user = await self.get_user_by_email(data.email)
+        user = await self.user_repo.get_by_email(data.email)
 
         success_message = MessageResponseSchema(
             message="If you are registered, "
@@ -366,7 +327,9 @@ class AccountsService:
         if not user or not user.is_active:
             return success_message
 
-        reset_token = await self.replace_password_reset_token(user.id)
+        await self.password_reset_token_repo.delete_all_for_user(user.id)
+        reset_token = PasswordResetToken(user_id=user.id)
+        self.password_reset_token_repo.add(reset_token)
         await self.db.commit()
 
         reset_link = (
@@ -380,14 +343,14 @@ class AccountsService:
     async def reset_password(
         self, data: PasswordResetCompleteRequestSchema
     ) -> MessageResponseSchema:
-        user = await self.get_user_by_email(data.email)
+        user = await self.user_repo.get_by_email(data.email)
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid email or token.",
             )
 
-        reset_token = await self.get_password_reset_token_by_user_id(user.id)
+        reset_token = await self.password_reset_token_repo.get_by_user_id(user.id)
         if reset_token is None or reset_token.token != data.token:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -397,7 +360,7 @@ class AccountsService:
         await self.raise_400_if_token_expired(reset_token, "Invalid email or token.")
 
         user.password = data.password
-        await self.db.delete(reset_token)
+        await self.password_reset_token_repo.delete(reset_token)
         await self.commit_or_raise_500(
             "An error occurred while resetting the password."
         )
@@ -412,12 +375,16 @@ class AccountsService:
     async def change_user_group(
         self, user_id: int, group_data: UserGroupUpdateRequestSchema
     ) -> UserGroupUpdateResponseSchema:
-        user = await self.get_user_by_id(user_id)
+        user = await self.user_repo.get_by_id(user_id)
         self.raise_404_if_user_is_none_or_not_active(user)
         assert user is not None
 
-        user_group = await self.get_user_group_by_name_or_500(group_data.group)
-        assert user_group is not None
+        user_group = await self.user_group_repo.get_by_name(group_data.group)
+        if user_group is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Requested user group is not configured.",
+            )
 
         user.group_id = user_group.id
         await self.commit_or_raise_500(
@@ -430,7 +397,7 @@ class AccountsService:
         )
 
     async def activate_user_manually(self, user_id: int) -> MessageResponseSchema:
-        user = await self.get_user_by_id(user_id)
+        user = await self.user_repo.get_by_id(user_id)
         if user is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
@@ -444,9 +411,9 @@ class AccountsService:
 
         user.is_active = True
 
-        activation_token = await self.get_activation_token_by_user_id(user_id)
+        activation_token = await self.activation_token_repo.get_by_user_id(user_id)
         if activation_token:
-            await self.db.delete(activation_token)
+            await self.activation_token_repo.delete(activation_token)
 
         await self.commit_or_raise_500("An error occurred while activating the user.")
 

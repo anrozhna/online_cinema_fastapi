@@ -12,6 +12,14 @@ from database.session import DataBase
 from exceptions.security import BaseSecurityError
 from notifications.emails import EmailSender
 from notifications.interfaces import EmailSenderInterface
+from repositories import (
+    ActivationTokenRepository,
+    PasswordResetTokenRepository,
+    ProfileRepository,
+    RefreshTokenRepository,
+    UserGroupRepository,
+    UserRepository,
+)
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
 from storages.interfaces import S3StorageInterface
@@ -146,3 +154,11 @@ def require_admin(current_user: CurrentUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(require_admin)]
+
+
+UserRepo = Annotated[UserRepository, Depends()]
+UserGroupRepo = Annotated[UserGroupRepository, Depends()]
+ActivationTokenRepo = Annotated[ActivationTokenRepository, Depends()]
+PasswordResetTokenRepo = Annotated[PasswordResetTokenRepository, Depends()]
+RefreshTokenRepo = Annotated[RefreshTokenRepository, Depends()]
+ProfileRepo = Annotated[ProfileRepository, Depends()]
