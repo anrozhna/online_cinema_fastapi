@@ -1,7 +1,10 @@
 import os
 import secrets
+from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
+from fastapi import Depends
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -90,3 +93,15 @@ class TestingSettings(BaseAppSettings):
     def redis_url(self) -> str:
         """Not backed by a real Redis in tests; celery tasks should be mocked."""
         return "redis://localhost:6379/0"
+
+
+@lru_cache
+def get_settings() -> BaseAppSettings:
+    """Return application settings based on the current environment."""
+    environment = os.getenv("ENVIRONMENT", "developing")
+    if environment == "testing":
+        return TestingSettings()
+    return Settings()
+
+
+GetSettings = Annotated[BaseAppSettings, Depends(get_settings)]

@@ -6,7 +6,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from config.dependencies import (
     ActivationTokenRepo,
-    GetSettings,
     JWTManager,
     PasswordResetTokenRepo,
     ProfileRepo,
@@ -14,6 +13,7 @@ from config.dependencies import (
     UserGroupRepo,
     UserRepo,
 )
+from config.settings import GetSettings
 from database.models.accounts import (
     ActivationToken,
     PasswordResetToken,

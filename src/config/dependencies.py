@@ -1,12 +1,10 @@
-import os
-from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 
-from config.settings import BaseAppSettings, Settings, TestingSettings
+from config.settings import GetSettings, Settings, get_settings
 from database.models.accounts import User, UserGroupEnum
 from database.session import DataBase
 from exceptions.security import BaseSecurityError
@@ -24,18 +22,6 @@ from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
 from storages.interfaces import S3StorageInterface
 from storages.s3 import S3StorageClient
-
-
-@lru_cache
-def get_settings() -> BaseAppSettings:
-    """Return application settings based on the current environment."""
-    environment = os.getenv("ENVIRONMENT", "developing")
-    if environment == "testing":
-        return TestingSettings()
-    return Settings()
-
-
-GetSettings = Annotated[BaseAppSettings, Depends(get_settings)]
 
 
 def get_jwt_auth_manager(
