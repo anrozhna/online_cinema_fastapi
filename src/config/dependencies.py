@@ -1,16 +1,14 @@
 import os
-from collections.abc import AsyncGenerator
 from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import BaseAppSettings, Settings, TestingSettings
 from database.models.accounts import User, UserGroupEnum
-from database.session import AsyncSessionLocal
+from database.session import DataBase
 from exceptions.security import BaseSecurityError
 from notifications.emails import EmailSender
 from notifications.interfaces import EmailSenderInterface
@@ -30,15 +28,6 @@ def get_settings() -> BaseAppSettings:
 
 
 GetSettings = Annotated[BaseAppSettings, Depends(get_settings)]
-
-
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency that yields a DB session and closes it after the request."""
-    async with AsyncSessionLocal() as session:
-        yield session
-
-
-DataBase = Annotated[AsyncSession, Depends(get_db)]
 
 
 def get_jwt_auth_manager(
