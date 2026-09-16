@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, field_validator
 
+from database.models.accounts import UserGroupEnum
 from database.validators import accounts as accounts_validators
 
 
@@ -88,3 +89,15 @@ class PasswordResetRequestSchema(BaseModel):
 
 class PasswordResetCompleteRequestSchema(BaseEmailPasswordSchema):
     token: str
+
+
+class UserGroupUpdateRequestSchema(BaseModel):
+    group: UserGroupEnum
+
+
+class UserGroupUpdateResponseSchema(BaseModel):
+    user_id: int
+    email: str
+    group: UserGroupEnum
+
+    model_config = {"from_attributes": True}
