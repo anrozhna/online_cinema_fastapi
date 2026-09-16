@@ -232,7 +232,7 @@ class AccountsService:
         refresh_token_record = RefreshToken.create(
             user_id=user.id,
             days_valid=self.settings.LOGIN_TIME_DAYS,
-            token=refresh_token,
+            raw_token=refresh_token,
         )
         self.refresh_token_repo.add(refresh_token_record)
         await self.commit_or_raise_500(
@@ -257,7 +257,7 @@ class AccountsService:
 
         user_id = decoded_refresh_token.get("user_id")
 
-        refresh_token = await self.refresh_token_repo.get_by_token(
+        refresh_token = await self.refresh_token_repo.get_by_raw_token(
             token_data.refresh_token
         )
         if not refresh_token:
@@ -281,7 +281,7 @@ class AccountsService:
         return TokenRefreshResponseSchema(access_token=new_access_token)
 
     async def logout(self, logout_data: LogoutRequestSchema) -> MessageResponseSchema:
-        refresh_token = await self.refresh_token_repo.get_by_token(
+        refresh_token = await self.refresh_token_repo.get_by_raw_token(
             logout_data.refresh_token
         )
         if not refresh_token:

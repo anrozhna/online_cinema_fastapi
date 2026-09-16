@@ -8,6 +8,7 @@ from database.models.accounts import (
     User,
 )
 from repositories.base import BaseRepository
+from security.token_hashing import hash_token
 
 
 class ActivationTokenRepository(BaseRepository[ActivationToken]):
@@ -52,7 +53,8 @@ class PasswordResetTokenRepository(BaseRepository[PasswordResetToken]):
 class RefreshTokenRepository(BaseRepository[RefreshToken]):
     model = RefreshToken
 
-    async def get_by_token(self, token: str) -> RefreshToken | None:
-        stmt = select(RefreshToken).where(RefreshToken.token == token)
+    async def get_by_raw_token(self, raw_token: str) -> RefreshToken | None:
+        token_hash = hash_token(raw_token)
+        stmt = select(RefreshToken).where(RefreshToken.token_hash == token_hash)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
