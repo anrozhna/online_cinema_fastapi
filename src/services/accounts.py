@@ -446,7 +446,7 @@ class AccountsService:
 
         activation_token = await self.get_activation_token_by_user_id(user_id)
         if activation_token:
-            await self.db.delete(user.activation_token)
+            await self.db.delete(activation_token)
 
         await self.commit_or_raise_500("An error occurred while activating the user.")
 
