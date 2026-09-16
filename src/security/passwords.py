@@ -2,7 +2,7 @@ from functools import lru_cache
 
 from passlib.context import CryptContext
 
-from config.dependencies import get_settings
+from config.settings import get_settings
 
 
 @lru_cache
