@@ -19,6 +19,7 @@ from database.models.accounts import (
     PasswordResetToken,
     RefreshToken,
     User,
+    UserGroup,
     UserGroupEnum,
     UserProfile,
 )
@@ -88,6 +89,18 @@ class AccountsService:
                 detail=error_detail,
             )
 
+    async def commit_and_refresh_or_raise_500(
+        self, instance, error_detail: str
+    ) -> None:
+        """Commit, then refresh `instance` from the DB;
+        rollback and raise 500 on failure.
+
+        Consolidates the "commit -> refresh" pair previously duplicated
+        between register_user and change_user_group.
+        """
+        await self.commit_or_raise_500(error_detail)
+        await self.db.refresh(instance)
+
     @staticmethod
     def is_token_expired(token) -> bool:
         """Works for any token model exposing an `expires_at` datetime column."""
@@ -108,6 +121,36 @@ class AccountsService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail
             )
 
+    def _send_activation_email(self, email: str, token: str) -> None:
+        """Consolidates the activation-link template previously duplicated
+        between register_user and resend_activation_link."""
+        activation_link = (
+            f"{self.settings.SITE_URL}/accounts/activate/"
+            f"?email={email}&token={token}"
+        )
+        send_activation_email_task.delay(str(email), activation_link)
+
+    def _send_activation_complete_email(self, email: str) -> None:
+        login_link = f"{self.settings.SITE_URL}/accounts/login/"
+        send_activation_complete_email_task.delay(str(email), login_link)
+
+    def _send_password_reset_complete_email(self, email: str) -> None:
+        """Consolidates the login-link template previously duplicated
+        between activate_account and reset_password."""
+        login_link = f"{self.settings.SITE_URL}/accounts/login/"
+        send_password_reset_complete_email_task.delay(
+            email=email, login_link=login_link
+        )
+
+    async def _get_or_raise_user_group(self, group_name: UserGroupEnum) -> UserGroup:
+        user_group = await self.user_group_repo.get_by_name(group_name)
+        if user_group is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Requested user group is not configured.",
+            )
+        return user_group
+
     async def register_user(self, user_data: UserRegistrationRequestSchema) -> User:
         existing_user = await self.user_repo.get_by_email(user_data.email)
         if existing_user:
@@ -116,12 +159,7 @@ class AccountsService:
                 detail=f"User with this email {user_data.email} already exists.",
             )
 
-        user_group = await self.user_group_repo.get_by_name(UserGroupEnum.USER)
-        if user_group is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Default user group is not configured.",
-            )
+        user_group = await self._get_or_raise_user_group(UserGroupEnum.USER)
 
         new_user = User.create(
             email=user_data.email,
@@ -135,14 +173,11 @@ class AccountsService:
         self.activation_token_repo.add(activation_token)
         self.profile_repo.add(UserProfile(user_id=new_user.id))
 
-        await self.commit_or_raise_500("An error occurred during user creation.")
-        await self.db.refresh(new_user)
-
-        activation_link = (
-            f"{self.settings.SITE_URL}/accounts/activate/"
-            f"?email={new_user.email}&token={activation_token.token}"
+        await self.commit_and_refresh_or_raise_500(
+            new_user, "An error occurred during user creation."
         )
-        send_activation_email_task.delay(str(user_data.email), activation_link)
+
+        self._send_activation_email(new_user.email, activation_token.token)
 
         return new_user
 
@@ -173,10 +208,7 @@ class AccountsService:
         await self.activation_token_repo.delete(activation_token)
         await self.db.commit()
 
-        login_link = f"{self.settings.SITE_URL}/accounts/login/"
-        send_activation_complete_email_task.delay(
-            str(activation_data.email), login_link
-        )
+        self._send_activation_complete_email(activation_data.email)
 
         return MessageResponseSchema(message="User account activated successfully.")
 
@@ -202,11 +234,7 @@ class AccountsService:
         self.activation_token_repo.add(new_token)
         await self.db.commit()
 
-        activation_link = (
-            f"{self.settings.SITE_URL}/accounts/activate/"
-            f"?email={user.email}&token={new_token.token}"
-        )
-        send_activation_email_task.delay(str(request_data.email), activation_link)
+        self._send_activation_email(user.email, new_token.token)
 
         return generic_response
 
@@ -365,10 +393,7 @@ class AccountsService:
             "An error occurred while resetting the password."
         )
 
-        login_link = f"{self.settings.SITE_URL}/accounts/login/"
-        send_password_reset_complete_email_task.delay(
-            email=user.email, login_link=login_link
-        )
+        self._send_password_reset_complete_email(user.email)
 
         return MessageResponseSchema(message="Password reset successfully.")
 
@@ -379,18 +404,12 @@ class AccountsService:
         self.raise_404_if_user_is_none_or_not_active(user)
         assert user is not None
 
-        user_group = await self.user_group_repo.get_by_name(group_data.group)
-        if user_group is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Requested user group is not configured.",
-            )
+        user_group = await self._get_or_raise_user_group(group_data.group)
 
         user.group_id = user_group.id
-        await self.commit_or_raise_500(
-            "An error occurred while updating the user group."
+        await self.commit_and_refresh_or_raise_500(
+            user, "An error occurred while updating the user group."
         )
-        await self.db.refresh(user)
 
         return UserGroupUpdateResponseSchema(
             user_id=user.id, email=user.email, group=group_data.group
