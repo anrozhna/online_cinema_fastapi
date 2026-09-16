@@ -1,7 +1,7 @@
 from datetime import date
 
 from fastapi import File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel, HttpUrl, ValidationError, field_validator
+from pydantic import BaseModel, Field, HttpUrl, ValidationError, field_validator
 
 from validation.profile import (
     validate_birth_date,
@@ -12,11 +12,31 @@ from validation.profile import (
 
 
 class UserProfileBaseSchema(BaseModel):
-    first_name: str | None = None
-    last_name: str | None = None
-    gender: str | None = None
-    date_of_birth: date | None = None
-    info: str | None = None
+    first_name: str | None = Field(
+        default=None,
+        description="User's first name. Letters only.",
+        examples=["John"],
+    )
+    last_name: str | None = Field(
+        default=None,
+        description="User's last name. Letters only.",
+        examples=["Smith"],
+    )
+    gender: str | None = Field(
+        default=None,
+        description="User's gender identity.",
+        examples=["woman"],
+    )
+    date_of_birth: date | None = Field(
+        default=None,
+        description="User's date of birth. Must correspond to an age of 18 or older.",
+        examples=["1995-06-15"],
+    )
+    info: str | None = Field(
+        default=None,
+        description="Short free-text bio or description.",
+        examples=["Movie enthusiast and weekend hiker."],
+    )
 
 
 class UserProfileRequestSchema(UserProfileBaseSchema):
@@ -63,12 +83,28 @@ class UserProfileRequestSchema(UserProfileBaseSchema):
     @classmethod
     def as_form(
         cls,
-        first_name: str | None = Form(None),
-        last_name: str | None = Form(None),
-        gender: str | None = Form(None),
-        date_of_birth: date | None = Form(None),
-        info: str | None = Form(None),
-        avatar: UploadFile | None = File(None),
+        first_name: str | None = Form(
+            None, description="User's first name. Letters only."
+        ),
+        last_name: str | None = Form(
+            None, description="User's last name. Letters only."
+        ),
+        gender: str | None = Form(None, description="User's gender identity."),
+        date_of_birth: date | None = Form(
+            None,
+            description="User's date of birth. "
+            "Must correspond to an age of 18 or older.",
+        ),
+        info: str | None = Form(
+            None, description="Short free-text bio or description."
+        ),
+        avatar: UploadFile | None = File(
+            None,
+            description=(
+                "Profile picture. JPG, JPEG, or PNG, max 1 MB. "
+                "Omit this field to leave the current avatar unchanged."
+            ),
+        ),
     ) -> "UserProfileRequestSchema":
         raw_data = {
             "first_name": first_name,
@@ -95,8 +131,10 @@ class UserProfileRequestSchema(UserProfileBaseSchema):
 
 
 class UserProfileResponseSchema(UserProfileBaseSchema):
-    id: int
-    user_id: int
-    avatar: HttpUrl | None = None
+    id: int = Field(..., description="Unique identifier of the profile.")
+    user_id: int = Field(..., description="ID of the user this profile belongs to.")
+    avatar: HttpUrl | None = Field(
+        default=None, description="Public URL of the user's avatar image, if uploaded."
+    )
 
     model_config = {"from_attributes": True}

@@ -14,10 +14,12 @@ router = APIRouter()
     summary="Get user profile",
     description=(
         "Retrieve the profile for the specified user, including personal "
-        "information and an avatar image."
+        "information and an avatar image. "
+        "Only the profile owner may perform this action."
     ),
     responses={
         200: {"description": "Profile retrieved."},
+        403: {"description": "You don't have permission to view this profile."},
         404: {"description": "User not found or not active."},
     },
     dependencies=[Depends(verify_profile_owner)],
@@ -29,9 +31,11 @@ async def get_profile(user_id: int, profile_service: ProfileServiceDep):
 @router.patch(
     path="/profile/{user_id}/update/",
     response_model=UserProfileResponseSchema,
-    summary="Replace user profile",
+    summary="Update user profile",
     description=(
-        "Replace a profile for the specified user. Returns 200 on replacement."
+        "Partially update the profile for the specified user — only the fields "
+        "provided in the form are changed; omitted fields keep their current "
+        "values. Only the profile owner may perform this action."
     ),
     responses={
         200: {"description": "Profile successfully updated."},

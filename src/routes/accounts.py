@@ -86,6 +86,7 @@ async def resend_activation_link(
     description="Authenticate a user and return access and refresh tokens.",
     status_code=status.HTTP_200_OK,
     responses={
+        200: {"description": "Login successful. Returns access and refresh tokens."},
         401: {"description": "Invalid email or password."},
         403: {"description": "User account is not activated."},
         500: {"description": "An error occurred while processing the request."},
@@ -102,16 +103,18 @@ async def login(
     path="/refresh/",
     response_model=TokenRefreshResponseSchema,
     summary="Refresh access token",
-    description="Refresh access token using refresh token",
+    description="Obtain a new access token using a valid, non-expired refresh token.",
     status_code=status.HTTP_200_OK,
     responses={
         200: {"description": "Access token successfully refreshed."},
         400: {"description": "The provided refresh token is invalid or expired."},
         401: {
-            "description": "The provided refresh token does not exist in the database."
+            "description": "The refresh token was not found or has already been "
+            "invalidated (e.g. via logout). Please log in again."
         },
         404: {
-            "description": "The user associated with the refresh token does not exist."
+            "description": "The user associated with the refresh token no longer "
+            "exists."
         },
     },
 )
@@ -148,7 +151,8 @@ async def logout(
     path="/change-password/",
     response_model=MessageResponseSchema,
     summary="Change password",
-    description="Change the password for the currently authenticated user.",
+    description="Change the password for the currently authenticated user. "
+    "Requires a valid Bearer access token.",
     status_code=status.HTTP_200_OK,
     responses={
         200: {
