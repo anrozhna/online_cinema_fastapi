@@ -1,3 +1,6 @@
+from typing import Annotated, AsyncGenerator
+
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -18,3 +21,12 @@ AsyncSessionLocal: async_sessionmaker[AsyncSession] = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency that yields a DB session and closes it after the request."""
+    async with AsyncSessionLocal() as session:
+        yield session
+
+
+DataBase = Annotated[AsyncSession, Depends(get_db)]

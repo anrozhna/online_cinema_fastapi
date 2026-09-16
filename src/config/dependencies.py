@@ -1,44 +1,27 @@
-import os
-from collections.abc import AsyncGenerator
-from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.settings import BaseAppSettings, Settings, TestingSettings
+from config.settings import GetSettings, Settings, get_settings
 from database.models.accounts import User, UserGroupEnum
-from database.session import AsyncSessionLocal
+from database.session import DataBase
 from exceptions.security import BaseSecurityError
 from notifications.emails import EmailSender
 from notifications.interfaces import EmailSenderInterface
+from repositories import (
+    ActivationTokenRepository,
+    PasswordResetTokenRepository,
+    ProfileRepository,
+    RefreshTokenRepository,
+    UserGroupRepository,
+    UserRepository,
+)
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
 from storages.interfaces import S3StorageInterface
 from storages.s3 import S3StorageClient
-
-
-@lru_cache
-def get_settings() -> BaseAppSettings:
-    """Return application settings based on the current environment."""
-    environment = os.getenv("ENVIRONMENT", "developing")
-    if environment == "testing":
-        return TestingSettings()
-    return Settings()
-
-
-GetSettings = Annotated[BaseAppSettings, Depends(get_settings)]
-
-
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency that yields a DB session and closes it after the request."""
-    async with AsyncSessionLocal() as session:
-        yield session
-
-
-DataBase = Annotated[AsyncSession, Depends(get_db)]
 
 
 def get_jwt_auth_manager(
@@ -157,3 +140,11 @@ def require_admin(current_user: CurrentUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(require_admin)]
+
+
+UserRepo = Annotated[UserRepository, Depends()]
+UserGroupRepo = Annotated[UserGroupRepository, Depends()]
+ActivationTokenRepo = Annotated[ActivationTokenRepository, Depends()]
+PasswordResetTokenRepo = Annotated[PasswordResetTokenRepository, Depends()]
+RefreshTokenRepo = Annotated[RefreshTokenRepository, Depends()]
+ProfileRepo = Annotated[ProfileRepository, Depends()]

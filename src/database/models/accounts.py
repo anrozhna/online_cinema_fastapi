@@ -19,6 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from database.models.base import Base
 from database.validators import accounts as validators
 from security.passwords import hash_password, verify_password
+from security.token_hashing import hash_token
 from security.utils import generate_secure_token
 
 
@@ -205,26 +206,26 @@ class RefreshToken(BaseToken):
     __tablename__ = "refresh_tokens"
 
     user: Mapped[User] = relationship("User", back_populates="refresh_tokens")
-    token: Mapped[str] = mapped_column(
-        String(512), unique=True, nullable=False, default=generate_secure_token
+    token_hash: Mapped[str] = mapped_column(
+        "token_hash", String(64), unique=True, nullable=False
     )
 
     @classmethod
     def create(
-        cls, user_id: int | Mapped[int], days_valid: int, token: str
+        cls, user_id: int | Mapped[int], days_valid: int, raw_token: str
     ) -> "RefreshToken":
         """
         Factory method to create a new RefreshToken instance.
 
-        This method simplifies the creation of a new refresh token by calculating
-        the expiration date based on the provided number of valid days and setting
-        the required attributes.
+        Hashes the raw JWT before persisting it — the DB stores only the
+        SHA-256 hash, so a database leak alone cannot be used to obtain
+        working refresh tokens. The raw token is only ever returned to the
+        client in the login response, never stored as-is.
         """
         expires_at = datetime.now(timezone.utc) + timedelta(days=days_valid)
-        return cls(user_id=user_id, expires_at=expires_at, token=token)
+        return cls(
+            user_id=user_id, expires_at=expires_at, token_hash=hash_token(raw_token)
+        )
 
     def __repr__(self):
-        return (
-            f"<RefreshToken(id={self.id}, token={self.token}, "
-            f"expires_at={self.expires_at})>"
-        )
+        return f"<RefreshToken(id={self.id}, expires_at={self.expires_at})>"

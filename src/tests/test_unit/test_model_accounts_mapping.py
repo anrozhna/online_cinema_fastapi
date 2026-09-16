@@ -28,6 +28,7 @@ from database.models.accounts import (
     UserProfile,
 )
 from database.models.base import Base
+from security.token_hashing import hash_token
 
 
 @pytest.fixture()
@@ -299,11 +300,13 @@ class TestRefreshToken:
         session.add(user)
         session.commit()
 
-        token = RefreshToken.create(user_id=user.id, days_valid=7, token="a" * 128)
+        raw_token = "a" * 128
+
+        token = RefreshToken.create(user_id=user.id, days_valid=7, raw_token=raw_token)
         session.add(token)
         session.commit()
 
-        assert token.token == "a" * 128
+        assert token.token_hash == hash_token(raw_token)
         assert (
             token.expires_at > token.created_at
             if hasattr(token, "created_at")
@@ -321,8 +324,12 @@ class TestRefreshToken:
 
         session.add_all(
             [
-                RefreshToken.create(user_id=user.id, days_valid=7, token="token-one"),
-                RefreshToken.create(user_id=user.id, days_valid=7, token="token-two"),
+                RefreshToken.create(
+                    user_id=user.id, days_valid=7, raw_token="token-one"
+                ),
+                RefreshToken.create(
+                    user_id=user.id, days_valid=7, raw_token="token-two"
+                ),
             ]
         )
         session.commit()

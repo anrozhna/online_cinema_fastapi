@@ -1,7 +1,10 @@
 import os
 import secrets
+from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
+from fastapi import Depends
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -55,6 +58,8 @@ class Settings(BaseAppSettings):
     MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
     MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin123")
 
+    BCRYPT_ROUNDS: int = int(os.getenv("BCRYPT_ROUNDS", 14))
+
     @property
     def s3_endpoint_url(self) -> str:
         """S3-compatible endpoint (MinIO locally, real AWS S3 URL in production)."""
@@ -81,6 +86,8 @@ class TestingSettings(BaseAppSettings):
     SECRET_KEY_REFRESH: str = "test-secret-key-refresh"
     JWT_SIGNING_ALGORITHM: str = "HS256"
 
+    BCRYPT_ROUNDS: int = 4
+
     @property
     def database_url(self) -> str:
         """In-memory SQLite for fast, isolated test runs."""
@@ -90,3 +97,15 @@ class TestingSettings(BaseAppSettings):
     def redis_url(self) -> str:
         """Not backed by a real Redis in tests; celery tasks should be mocked."""
         return "redis://localhost:6379/0"
+
+
+@lru_cache
+def get_settings() -> BaseAppSettings:
+    """Return application settings based on the current environment."""
+    environment = os.getenv("ENVIRONMENT", "developing")
+    if environment == "testing":
+        return TestingSettings()
+    return Settings()
+
+
+GetSettings = Annotated[BaseAppSettings, Depends(get_settings)]

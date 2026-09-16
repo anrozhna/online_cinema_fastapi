@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("ENVIRONMENT", "testing")
+
 from collections.abc import AsyncGenerator
 from unittest.mock import patch
 
@@ -7,7 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from config.dependencies import get_current_user, get_db, get_s3_storage, get_settings
+from config.dependencies import get_current_user, get_s3_storage, get_settings
 from config.settings import TestingSettings
 from database.models.accounts import (
     GenderEnum,
@@ -17,6 +21,7 @@ from database.models.accounts import (
     UserProfile,
 )
 from database.models.base import Base
+from database.session import get_db
 from exceptions.storage import S3FileUploadError
 from main import app
 from storages.interfaces import S3StorageInterface
