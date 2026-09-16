@@ -16,12 +16,12 @@ class ProfileService:
         self.db = db
         self.storage = storage
 
-    async def get_user_by_id(self, user_id: int):
+    async def get_user_by_id(self, user_id: int) -> User | None:
         stmt = select(User).where(User.id == user_id)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_profile_by_user_id(self, user_id: int):
+    async def get_profile_by_user_id(self, user_id: int) -> UserProfile | None:
         stmt = select(UserProfile).where(UserProfile.user_id == user_id)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
