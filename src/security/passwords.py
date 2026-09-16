@@ -1,6 +1,17 @@
+from functools import lru_cache
+
 from passlib.context import CryptContext
 
-pwd_context = CryptContext(schemes=["bcrypt"], bcrypt__rounds=14, deprecated="auto")
+from config.dependencies import get_settings
+
+
+@lru_cache
+def _get_pwd_context() -> CryptContext:
+    """Cached CryptContext built from current settings."""
+    settings = get_settings()
+    return CryptContext(
+        schemes=["bcrypt"], bcrypt__rounds=settings.BCRYPT_ROUNDS, deprecated="auto"
+    )
 
 
 def hash_password(password: str) -> str:
@@ -17,7 +28,7 @@ def hash_password(password: str) -> str:
     Returns:
         str: The resulting hashed password.
     """
-    return pwd_context.hash(password)
+    return _get_pwd_context().hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -34,4 +45,4 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         bool: True if the password is correct, False otherwise.
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    return _get_pwd_context().verify(plain_password, hashed_password)

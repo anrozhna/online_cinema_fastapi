@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("ENVIRONMENT", "testing")
+
 from collections.abc import AsyncGenerator
 from unittest.mock import patch
 

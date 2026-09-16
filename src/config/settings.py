@@ -58,6 +58,8 @@ class Settings(BaseAppSettings):
     MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
     MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin123")
 
+    BCRYPT_ROUNDS: int = int(os.getenv("BCRYPT_ROUNDS", 14))
+
     @property
     def s3_endpoint_url(self) -> str:
         """S3-compatible endpoint (MinIO locally, real AWS S3 URL in production)."""
@@ -83,6 +85,8 @@ class TestingSettings(BaseAppSettings):
     SECRET_KEY_ACCESS: str = "test-secret-key-access"
     SECRET_KEY_REFRESH: str = "test-secret-key-refresh"
     JWT_SIGNING_ALGORITHM: str = "HS256"
+
+    BCRYPT_ROUNDS: int = 4
 
     @property
     def database_url(self) -> str:
