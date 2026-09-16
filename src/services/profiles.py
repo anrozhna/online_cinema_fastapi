@@ -2,29 +2,25 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from pydantic import HttpUrl
-from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from config.dependencies import DataBase, S3Storage
+from config.dependencies import ProfileRepo, S3Storage, UserRepo
 from database.models.accounts import User, UserProfile
 from exceptions.storage import BaseS3Error
 from schemas.profiles import UserProfileRequestSchema, UserProfileResponseSchema
 
 
 class ProfileService:
-    def __init__(self, db: DataBase, storage: S3Storage):
-        self.db = db
+    def __init__(
+        self,
+        user_repo: UserRepo,
+        profile_repo: ProfileRepo,
+        storage: S3Storage,
+    ):
+        self.user_repo = user_repo
+        self.profile_repo = profile_repo
         self.storage = storage
-
-    async def get_user_by_id(self, user_id: int) -> User | None:
-        stmt = select(User).where(User.id == user_id)
-        result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def get_profile_by_user_id(self, user_id: int) -> UserProfile | None:
-        stmt = select(UserProfile).where(UserProfile.user_id == user_id)
-        result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
+        self.db = user_repo.db
 
     @staticmethod
     def raise_404_if_user_is_none_or_not_active(user: User | None) -> None:
@@ -99,10 +95,10 @@ class ProfileService:
         )
 
     async def get_profile(self, user_id: int) -> UserProfileResponseSchema:
-        user = await self.get_user_by_id(user_id=user_id)
+        user = await self.user_repo.get_by_id(user_id)
         self.raise_404_if_user_is_none_or_not_active(user=user)
 
-        profile = await self.get_profile_by_user_id(user_id=user_id)
+        profile = await self.profile_repo.get_by_user_id(user_id)
         self.raise_404_if_profile_is_none(profile=profile)
         assert profile is not None
 
@@ -115,10 +111,10 @@ class ProfileService:
     ) -> UserProfileResponseSchema:
         """Fetch, validate, update the user profile, and upload an avatar if present."""
 
-        user = await self.get_user_by_id(user_id=user_id)
+        user = await self.user_repo.get_by_id(user_id)
         self.raise_404_if_user_is_none_or_not_active(user=user)
 
-        profile = await self.get_profile_by_user_id(user_id=user_id)
+        profile = await self.profile_repo.get_by_user_id(user_id)
         self.raise_404_if_profile_is_none(profile=profile)
         assert profile is not None
 
