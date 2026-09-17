@@ -15,12 +15,23 @@ class CommentService:
 
     @staticmethod
     def _build_comment_tree(comments: list[Comment]) -> list[CommentResponseSchema]:
-        """Build a nested reply tree from a FLAT list of comments in O(n),
-        without touching the (potentially unloaded) `replies` relationship
-        on any ORM object — avoids the async lazy-load / MissingGreenlet
-        problem entirely by working from plain data, not ORM attributes."""
+        """Build a nested reply tree from a FLAT list of comments in O(n).
+
+        Builds each CommentResponseSchema explicitly (not via model_validate)
+        so Pydantic never touches the ORM `replies` relationship — which would
+        trigger a lazy load and MissingGreenlet, since these Comment objects
+        come from a flat, non-recursive query.
+        """
         schemas_by_id: dict[int, CommentResponseSchema] = {
-            comment.id: CommentResponseSchema.model_validate(comment)
+            comment.id: CommentResponseSchema(
+                id=comment.id,
+                user_id=comment.user_id,
+                movie_id=comment.movie_id,
+                text=comment.text,
+                parent_comment_id=comment.parent_comment_id,
+                created_at=comment.created_at,
+                replies=[],
+            )
             for comment in comments
         }
 
@@ -67,7 +78,18 @@ class CommentService:
         await self.comment_repo.db.commit()
         await self.comment_repo.db.refresh(comment)
 
-        return CommentResponseSchema.model_validate(comment)
+        # A freshly created comment can have no replies yet — build the schema
+        # explicitly instead of letting Pydantic touch the unloaded `replies`
+        # relationship (which would trigger a lazy load and MissingGreenlet).
+        return CommentResponseSchema(
+            id=comment.id,
+            user_id=comment.user_id,
+            movie_id=comment.movie_id,
+            text=comment.text,
+            parent_comment_id=comment.parent_comment_id,
+            created_at=comment.created_at,
+            replies=[],
+        )
 
 
 CommentServiceDep = Annotated[CommentService, Depends()]
