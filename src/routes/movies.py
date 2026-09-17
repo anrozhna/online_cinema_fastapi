@@ -5,11 +5,14 @@ from fastapi import APIRouter, Query, status
 from config.dependencies import CurrentUser
 from repositories.movies import MovieSortField
 from schemas.movies import (
+    CommentCreateRequestSchema,
+    CommentResponseSchema,
     MovieDetailSchema,
     MovieReactionRequestSchema,
     MovieReactionResponseSchema,
     PaginatedMoviesResponseSchema,
 )
+from services.comments import CommentServiceDep
 from services.movies import MovieServiceDep
 from services.reactions import MovieReactionServiceDep
 
@@ -88,5 +91,47 @@ async def react_to_movie(
     reaction_service: MovieReactionServiceDep,
 ):
     return await reaction_service.react_to_movie(
+        movie_id=movie_id, user_id=current_user.id, data=data
+    )
+
+
+@router.get(
+    path="/{movie_id}/comments/",
+    response_model=list[CommentResponseSchema],
+    status_code=status.HTTP_200_OK,
+    summary="List comments for a movie",
+    description="Retrieve all comments for a movie as a nested reply tree.",
+    responses={
+        200: {"description": "Comments retrieved successfully."},
+        404: {"description": "Movie not found."},
+    },
+)
+async def list_movie_comments(movie_id: int, comment_service: CommentServiceDep):
+    return await comment_service.list_comments_for_movie(movie_id)
+
+
+@router.post(
+    path="/{movie_id}/comments/",
+    response_model=CommentResponseSchema,
+    status_code=status.HTTP_201_CREATED,
+    summary="Post a comment or reply",
+    description=(
+        "Create a new top-level comment, or a reply by providing "
+        "parent_comment_id. Requires a valid Bearer access token."
+    ),
+    responses={
+        201: {"description": "Comment posted successfully."},
+        400: {"description": "Parent comment not found for this movie."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Movie not found."},
+    },
+)
+async def create_movie_comment(
+    movie_id: int,
+    data: CommentCreateRequestSchema,
+    current_user: CurrentUser,
+    comment_service: CommentServiceDep,
+):
+    return await comment_service.create_comment(
         movie_id=movie_id, user_id=current_user.id, data=data
     )
