@@ -1,4 +1,5 @@
 from repositories.base import BaseRepository
+from repositories.comments import CommentRepository
 from repositories.movies import (
     CertificationRepository,
     DirectorRepository,
@@ -7,6 +8,8 @@ from repositories.movies import (
     StarRepository,
 )
 from repositories.profiles import ProfileRepository
+from repositories.ratings import RatingRepository
+from repositories.reactions import MovieReactionRepository
 from repositories.tokens import (
     ActivationTokenRepository,
     PasswordResetTokenRepository,
@@ -27,4 +30,7 @@ __all__ = [
     "GenreRepository",
     "MovieRepository",
     "StarRepository",
+    "CommentRepository",
+    "MovieReactionRepository",
+    "RatingRepository",
 ]
