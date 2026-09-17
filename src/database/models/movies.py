@@ -156,7 +156,9 @@ class Comment(Base):
     parent: Mapped["Comment | None"] = relationship(
         remote_side=[id], back_populates="replies"
     )
-    replies: Mapped[list["Comment"]] = relationship(back_populates="parent")
+    replies: Mapped[list["Comment"]] = relationship(
+        back_populates="parent", cascade="all, delete-orphan"
+    )
 
 
 class Rating(Base):
