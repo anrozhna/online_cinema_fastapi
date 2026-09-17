@@ -2,9 +2,16 @@ import uuid as uuid_lib
 
 from fastapi import APIRouter, Query, status
 
+from config.dependencies import CurrentUser
 from repositories.movies import MovieSortField
-from schemas.movies import MovieDetailSchema, PaginatedMoviesResponseSchema
+from schemas.movies import (
+    MovieDetailSchema,
+    MovieReactionRequestSchema,
+    MovieReactionResponseSchema,
+    PaginatedMoviesResponseSchema,
+)
 from services.movies import MovieServiceDep
+from services.reactions import MovieReactionServiceDep
 
 router = APIRouter()
 
@@ -55,4 +62,31 @@ async def list_movies(
         search=search,
         sort_by=sort_by,
         sort_desc=sort_desc,
+    )
+
+
+@router.post(
+    path="/{movie_id}/reaction/",
+    response_model=MovieReactionResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Like or dislike a movie",
+    description=(
+        "Set the current user's reaction to a movie. Calling this again "
+        "updates the existing reaction rather than creating a duplicate. "
+        "Requires a valid Bearer access token."
+    ),
+    responses={
+        200: {"description": "Reaction recorded or updated successfully."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Movie not found."},
+    },
+)
+async def react_to_movie(
+    movie_id: int,
+    data: MovieReactionRequestSchema,
+    current_user: CurrentUser,
+    reaction_service: MovieReactionServiceDep,
+):
+    return await reaction_service.react_to_movie(
+        movie_id=movie_id, user_id=current_user.id, data=data
     )
