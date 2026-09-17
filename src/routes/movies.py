@@ -11,9 +11,12 @@ from schemas.movies import (
     MovieReactionRequestSchema,
     MovieReactionResponseSchema,
     PaginatedMoviesResponseSchema,
+    RatingRequestSchema,
+    RatingResponseSchema,
 )
 from services.comments import CommentServiceDep
 from services.movies import MovieServiceDep
+from services.ratings import RatingServiceDep
 from services.reactions import MovieReactionServiceDep
 
 router = APIRouter()
@@ -133,5 +136,33 @@ async def create_movie_comment(
     comment_service: CommentServiceDep,
 ):
     return await comment_service.create_comment(
+        movie_id=movie_id, user_id=current_user.id, data=data
+    )
+
+
+@router.post(
+    path="/{movie_id}/rating/",
+    response_model=RatingResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Rate a movie",
+    description=(
+        "Set the current user's 1-10 rating for a movie. Calling this again "
+        "updates the existing rating rather than creating a duplicate. "
+        "Requires a valid Bearer access token."
+    ),
+    responses={
+        200: {"description": "Rating recorded or updated successfully."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Movie not found."},
+        422: {"description": "Score must be between 1 and 10."},
+    },
+)
+async def rate_movie(
+    movie_id: int,
+    data: RatingRequestSchema,
+    current_user: CurrentUser,
+    rating_service: RatingServiceDep,
+):
+    return await rating_service.rate_movie(
         movie_id=movie_id, user_id=current_user.id, data=data
     )
