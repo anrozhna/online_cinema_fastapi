@@ -26,7 +26,7 @@ from repositories import (
     UserGroupRepository,
     UserRepository,
 )
-from repositories.favorites import FavoriteRepository
+from repositories.favorites import FavoriteMoviesRepository, FavoriteRepository
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
 from storages.interfaces import S3StorageInterface
@@ -166,3 +166,4 @@ CommentRepo = Annotated[CommentRepository, Depends()]
 RatingRepo = Annotated[RatingRepository, Depends()]
 MovieReactionRepo = Annotated[MovieReactionRepository, Depends()]
 FavoriteRepo = Annotated[FavoriteRepository, Depends()]
+FavoriteMoviesRepo = Annotated[FavoriteMoviesRepository, Depends()]
