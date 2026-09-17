@@ -125,6 +125,9 @@ class Movie(Base):
     comments: Mapped[list["Comment"]] = relationship(
         back_populates="movie", cascade="all, delete-orphan"
     )
+    ratings: Mapped[list["Rating"]] = relationship(
+        back_populates="movie", cascade="all, delete-orphan"
+    )
 
 
 class Comment(Base):
@@ -150,3 +153,24 @@ class Comment(Base):
         remote_side=[id], back_populates="replies"
     )
     replies: Mapped[list["Comment"]] = relationship(back_populates="parent")
+
+
+class Rating(Base):
+    __tablename__ = "ratings"
+    __table_args__ = (
+        UniqueConstraint("user_id", "movie_id", name="uq_rating_user_movie"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    movie_id: Mapped[int] = mapped_column(
+        ForeignKey("movies.id", ondelete="CASCADE"), nullable=False
+    )
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    movie: Mapped["Movie"] = relationship(back_populates="ratings")
