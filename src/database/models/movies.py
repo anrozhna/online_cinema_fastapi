@@ -132,6 +132,9 @@ class Movie(Base):
     reactions: Mapped[list["MovieReaction"]] = relationship(
         back_populates="movie", cascade="all, delete-orphan"
     )
+    favorites: Mapped[list["Favorite"]] = relationship(
+        back_populates="movie", cascade="all, delete-orphan"
+    )
 
 
 class Comment(Base):
@@ -201,3 +204,23 @@ class MovieReaction(Base):
     )
 
     movie: Mapped["Movie"] = relationship(back_populates="reactions")
+
+
+class Favorite(Base):
+    __tablename__ = "favorites"
+    __table_args__ = (
+        UniqueConstraint("user_id", "movie_id", name="uq_favorite_user_movie"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    movie_id: Mapped[int] = mapped_column(
+        ForeignKey("movies.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    movie: Mapped["Movie"] = relationship(back_populates="favorites")

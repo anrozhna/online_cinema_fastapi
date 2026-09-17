@@ -1,19 +1,12 @@
-from enum import Enum
-
-from sqlalchemy import func, or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import joinedload, selectinload
 
 from database.models.movies import Certification, Director, Genre, Movie, Star
-from repositories.base import BaseRepository, NamedEntityRepository
+from repositories.base import NamedEntityRepository
+from repositories.base_movie import BaseMovieRepository, MovieSortField
 
 
-class MovieSortField(str, Enum):
-    PRICE = "price"
-    YEAR = "year"
-    IMDB = "imdb"
-
-
-class MovieRepository(BaseRepository[Movie]):
+class MovieRepository(BaseMovieRepository):
     model = Movie
 
     async def get_by_uuid(self, movie_uuid) -> Movie | None:
@@ -30,38 +23,6 @@ class MovieRepository(BaseRepository[Movie]):
         result = await self.db.execute(stmt)
         return result.unique().scalar_one_or_none()
 
-    @staticmethod
-    def _build_filtered_query(
-        year: int | None,
-        min_imdb: float | None,
-        search: str | None,
-    ):
-        """Shared WHERE/JOIN logic for both list_movies and count_movies —
-        keeps filtering and counting always in sync."""
-        stmt = select(Movie)
-
-        if search:
-            stmt = (
-                stmt.outerjoin(Movie.directors)
-                .outerjoin(Movie.stars)
-                .where(
-                    or_(
-                        Movie.name.ilike(f"%{search}%"),
-                        Movie.description.ilike(f"%{search}%"),
-                        Director.name.ilike(f"%{search}%"),
-                        Star.name.ilike(f"%{search}%"),
-                    )
-                )
-                .distinct()
-            )
-
-        if year is not None:
-            stmt = stmt.where(Movie.year == year)
-        if min_imdb is not None:
-            stmt = stmt.where(Movie.imdb >= min_imdb)
-
-        return stmt
-
     async def list_movies(
         self,
         limit: int,
@@ -72,16 +33,12 @@ class MovieRepository(BaseRepository[Movie]):
         sort_by: MovieSortField | None = None,
         sort_desc: bool = False,
     ) -> list[Movie]:
-        stmt = self._build_filtered_query(year, min_imdb, search)
-        stmt = stmt.options(selectinload(Movie.genres))
-
-        if sort_by is not None:
-            column = getattr(Movie, sort_by.value)
-            stmt = stmt.order_by(column.desc() if sort_desc else column.asc())
-
-        stmt = stmt.limit(limit).offset(offset)
-        result = await self.db.execute(stmt)
-        return list(result.unique().scalars().all())
+        stmt = self._apply_filters(
+            stmt=select(Movie), year=year, min_imdb=min_imdb, search=search
+        )
+        return await self._paginate_and_sort(
+            stmt=stmt, limit=limit, offset=offset, sort_by=sort_by, sort_desc=sort_desc
+        )
 
     async def count_movies(
         self,
@@ -89,10 +46,10 @@ class MovieRepository(BaseRepository[Movie]):
         min_imdb: float | None = None,
         search: str | None = None,
     ) -> int:
-        base_stmt = self._build_filtered_query(year, min_imdb, search)
-        stmt = select(func.count()).select_from(base_stmt.subquery())
-        result = await self.db.execute(stmt)
-        return result.scalar_one()
+        stmt = self._apply_filters(
+            stmt=select(Movie), year=year, min_imdb=min_imdb, search=search
+        )
+        return await self._count(stmt)
 
     async def exists_by_name_year_time(self, name: str, year: int, time: int) -> bool:
         stmt = select(Movie.id).where(

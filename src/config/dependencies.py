@@ -13,16 +13,20 @@ from notifications.interfaces import EmailSenderInterface
 from repositories import (
     ActivationTokenRepository,
     CertificationRepository,
+    CommentRepository,
     DirectorRepository,
     GenreRepository,
+    MovieReactionRepository,
     MovieRepository,
     PasswordResetTokenRepository,
     ProfileRepository,
+    RatingRepository,
     RefreshTokenRepository,
     StarRepository,
     UserGroupRepository,
     UserRepository,
 )
+from repositories.favorites import FavoriteMoviesRepository, FavoriteRepository
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
 from storages.interfaces import S3StorageInterface
@@ -158,3 +162,8 @@ GenreRepo = Annotated[GenreRepository, Depends()]
 StarRepo = Annotated[StarRepository, Depends()]
 DirectorRepo = Annotated[DirectorRepository, Depends()]
 CertificationRepo = Annotated[CertificationRepository, Depends()]
+CommentRepo = Annotated[CommentRepository, Depends()]
+RatingRepo = Annotated[RatingRepository, Depends()]
+MovieReactionRepo = Annotated[MovieReactionRepository, Depends()]
+FavoriteRepo = Annotated[FavoriteRepository, Depends()]
+FavoriteMoviesRepo = Annotated[FavoriteMoviesRepository, Depends()]

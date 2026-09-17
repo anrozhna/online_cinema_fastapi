@@ -2,11 +2,106 @@ import uuid as uuid_lib
 
 from fastapi import APIRouter, Query, status
 
+from config.dependencies import CurrentUser
 from repositories.movies import MovieSortField
-from schemas.movies import MovieDetailSchema, PaginatedMoviesResponseSchema
+from schemas.movies import (
+    CommentCreateRequestSchema,
+    CommentResponseSchema,
+    MovieDetailSchema,
+    MovieReactionRequestSchema,
+    MovieReactionResponseSchema,
+    PaginatedMoviesResponseSchema,
+    RatingRequestSchema,
+    RatingResponseSchema,
+)
+from services.comments import CommentServiceDep
+from services.favorites import FavoriteServiceDep
 from services.movies import MovieServiceDep
+from services.ratings import RatingServiceDep
+from services.reactions import MovieReactionServiceDep
 
 router = APIRouter()
+
+
+@router.get(
+    path="/favorites/",
+    response_model=PaginatedMoviesResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="List favorite movies",
+    description=(
+        "Retrieve the current user's favorite movies, with the same "
+        "filtering, sorting and search support as the main catalog. "
+        "Requires a valid Bearer access token."
+    ),
+    responses={
+        200: {"description": "Favorites retrieved successfully."},
+        401: {"description": "Invalid or missing access token."},
+    },
+)
+async def list_favorite_movies(
+    current_user: CurrentUser,
+    favorite_service: FavoriteServiceDep,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    year: int | None = Query(default=None),
+    min_imdb: float | None = Query(default=None, ge=0, le=10),
+    search: str | None = Query(default=None, min_length=1),
+    sort_by: MovieSortField | None = Query(default=None),
+    sort_desc: bool = Query(default=False),
+):
+    return await favorite_service.list_favorites(
+        user_id=current_user.id,
+        limit=limit,
+        offset=offset,
+        year=year,
+        min_imdb=min_imdb,
+        search=search,
+        sort_by=sort_by,
+        sort_desc=sort_desc,
+    )
+
+
+@router.post(
+    path="/{movie_id}/favorite/",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Add a movie to favorites",
+    description=(
+        "Add a movie to the current user's favorites list. Idempotent — "
+        "calling this again for an already-favorite movie has no effect. "
+        "Requires a valid Bearer access token."
+    ),
+    responses={
+        204: {"description": "Movie added to favorites (or already present)."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Movie not found."},
+    },
+)
+async def add_movie_to_favorites(
+    movie_id: int, current_user: CurrentUser, favorite_service: FavoriteServiceDep
+):
+    await favorite_service.add_to_favorites(movie_id=movie_id, user_id=current_user.id)
+
+
+@router.delete(
+    path="/{movie_id}/favorite/",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove a movie from favorites",
+    description=(
+        "Remove a movie from the current user's favorites list. "
+        "Requires a valid Bearer access token."
+    ),
+    responses={
+        204: {"description": "Movie removed from favorites."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Movie is not in favorites."},
+    },
+)
+async def remove_movie_from_favorites(
+    movie_id: int, current_user: CurrentUser, favorite_service: FavoriteServiceDep
+):
+    await favorite_service.remove_from_favorites(
+        movie_id=movie_id, user_id=current_user.id
+    )
 
 
 @router.get(
@@ -55,4 +150,101 @@ async def list_movies(
         search=search,
         sort_by=sort_by,
         sort_desc=sort_desc,
+    )
+
+
+@router.post(
+    path="/{movie_id}/reaction/",
+    response_model=MovieReactionResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Like or dislike a movie",
+    description=(
+        "Set the current user's reaction to a movie. Calling this again "
+        "updates the existing reaction rather than creating a duplicate. "
+        "Requires a valid Bearer access token."
+    ),
+    responses={
+        200: {"description": "Reaction recorded or updated successfully."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Movie not found."},
+    },
+)
+async def react_to_movie(
+    movie_id: int,
+    data: MovieReactionRequestSchema,
+    current_user: CurrentUser,
+    reaction_service: MovieReactionServiceDep,
+):
+    return await reaction_service.react_to_movie(
+        movie_id=movie_id, user_id=current_user.id, data=data
+    )
+
+
+@router.get(
+    path="/{movie_id}/comments/",
+    response_model=list[CommentResponseSchema],
+    status_code=status.HTTP_200_OK,
+    summary="List comments for a movie",
+    description="Retrieve all comments for a movie as a nested reply tree.",
+    responses={
+        200: {"description": "Comments retrieved successfully."},
+        404: {"description": "Movie not found."},
+    },
+)
+async def list_movie_comments(movie_id: int, comment_service: CommentServiceDep):
+    return await comment_service.list_comments_for_movie(movie_id)
+
+
+@router.post(
+    path="/{movie_id}/comments/",
+    response_model=CommentResponseSchema,
+    status_code=status.HTTP_201_CREATED,
+    summary="Post a comment or reply",
+    description=(
+        "Create a new top-level comment, or a reply by providing "
+        "parent_comment_id. Requires a valid Bearer access token."
+    ),
+    responses={
+        201: {"description": "Comment posted successfully."},
+        400: {"description": "Parent comment not found for this movie."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Movie not found."},
+    },
+)
+async def create_movie_comment(
+    movie_id: int,
+    data: CommentCreateRequestSchema,
+    current_user: CurrentUser,
+    comment_service: CommentServiceDep,
+):
+    return await comment_service.create_comment(
+        movie_id=movie_id, user_id=current_user.id, data=data
+    )
+
+
+@router.post(
+    path="/{movie_id}/rating/",
+    response_model=RatingResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Rate a movie",
+    description=(
+        "Set the current user's 1-10 rating for a movie. Calling this again "
+        "updates the existing rating rather than creating a duplicate. "
+        "Requires a valid Bearer access token."
+    ),
+    responses={
+        200: {"description": "Rating recorded or updated successfully."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Movie not found."},
+        422: {"description": "Score must be between 1 and 10."},
+    },
+)
+async def rate_movie(
+    movie_id: int,
+    data: RatingRequestSchema,
+    current_user: CurrentUser,
+    rating_service: RatingServiceDep,
+):
+    return await rating_service.rate_movie(
+        movie_id=movie_id, user_id=current_user.id, data=data
     )
