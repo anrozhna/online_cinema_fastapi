@@ -69,3 +69,10 @@ class MovieListSchema(MovieBaseSchema):
     genres: list[GenreBaseSchema]
 
     model_config = {"from_attributes": True}
+
+
+class PaginatedMoviesResponseSchema(BaseModel):
+    items: list[MovieListSchema]
+    total: int
+    limit: int
+    offset: int
