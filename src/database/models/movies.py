@@ -4,6 +4,7 @@ from typing import Optional
 
 from sqlalchemy import (
     DECIMAL,
+    Boolean,
     Column,
     DateTime,
     Float,
@@ -128,6 +129,9 @@ class Movie(Base):
     ratings: Mapped[list["Rating"]] = relationship(
         back_populates="movie", cascade="all, delete-orphan"
     )
+    reactions: Mapped[list["MovieReaction"]] = relationship(
+        back_populates="movie", cascade="all, delete-orphan"
+    )
 
 
 class Comment(Base):
@@ -174,3 +178,24 @@ class Rating(Base):
     )
 
     movie: Mapped["Movie"] = relationship(back_populates="ratings")
+
+
+class MovieReaction(Base):
+    __tablename__ = "movie_reactions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "movie_id", name="uq_reaction_user_movie"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    movie_id: Mapped[int] = mapped_column(
+        ForeignKey("movies.id", ondelete="CASCADE"), nullable=False
+    )
+    is_like: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    movie: Mapped["Movie"] = relationship(back_populates="reactions")
