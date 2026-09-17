@@ -1,9 +1,11 @@
 import uuid as uuid_lib
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
     DECIMAL,
     Column,
+    DateTime,
     Float,
     ForeignKey,
     Integer,
@@ -12,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -119,3 +122,31 @@ class Movie(Base):
     stars: Mapped[list["Star"]] = relationship(
         secondary=movie_stars, back_populates="movies"
     )
+    comments: Mapped[list["Comment"]] = relationship(
+        back_populates="movie", cascade="all, delete-orphan"
+    )
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    movie_id: Mapped[int] = mapped_column(
+        ForeignKey("movies.id", ondelete="CASCADE"), nullable=False
+    )
+    parent_comment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("comments.id", ondelete="CASCADE"), nullable=True
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    movie: Mapped["Movie"] = relationship(back_populates="comments")
+    parent: Mapped["Comment | None"] = relationship(
+        remote_side=[id], back_populates="replies"
+    )
+    replies: Mapped[list["Comment"]] = relationship(back_populates="parent")
