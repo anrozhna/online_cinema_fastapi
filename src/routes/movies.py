@@ -15,11 +15,93 @@ from schemas.movies import (
     RatingResponseSchema,
 )
 from services.comments import CommentServiceDep
+from services.favorites import FavoriteServiceDep
 from services.movies import MovieServiceDep
 from services.ratings import RatingServiceDep
 from services.reactions import MovieReactionServiceDep
 
 router = APIRouter()
+
+
+@router.get(
+    path="/favorites/",
+    response_model=PaginatedMoviesResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="List favorite movies",
+    description=(
+        "Retrieve the current user's favorite movies, with the same "
+        "filtering, sorting and search support as the main catalog. "
+        "Requires a valid Bearer access token."
+    ),
+    responses={
+        200: {"description": "Favorites retrieved successfully."},
+        401: {"description": "Invalid or missing access token."},
+    },
+)
+async def list_favorite_movies(
+    current_user: CurrentUser,
+    favorite_service: FavoriteServiceDep,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    year: int | None = Query(default=None),
+    min_imdb: float | None = Query(default=None, ge=0, le=10),
+    search: str | None = Query(default=None, min_length=1),
+    sort_by: MovieSortField | None = Query(default=None),
+    sort_desc: bool = Query(default=False),
+):
+    return await favorite_service.list_favorites(
+        user_id=current_user.id,
+        limit=limit,
+        offset=offset,
+        year=year,
+        min_imdb=min_imdb,
+        search=search,
+        sort_by=sort_by,
+        sort_desc=sort_desc,
+    )
+
+
+@router.post(
+    path="/{movie_id}/favorite/",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Add a movie to favorites",
+    description=(
+        "Add a movie to the current user's favorites list. Idempotent — "
+        "calling this again for an already-favorite movie has no effect. "
+        "Requires a valid Bearer access token."
+    ),
+    responses={
+        204: {"description": "Movie added to favorites (or already present)."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Movie not found."},
+    },
+)
+async def add_movie_to_favorites(
+    movie_id: int, current_user: CurrentUser, favorite_service: FavoriteServiceDep
+):
+    await favorite_service.add_to_favorites(movie_id=movie_id, user_id=current_user.id)
+
+
+@router.delete(
+    path="/{movie_id}/favorite/",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove a movie from favorites",
+    description=(
+        "Remove a movie from the current user's favorites list. "
+        "Requires a valid Bearer access token."
+    ),
+    responses={
+        204: {"description": "Movie removed from favorites."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Movie is not in favorites."},
+    },
+)
+async def remove_movie_from_favorites(
+    movie_id: int, current_user: CurrentUser, favorite_service: FavoriteServiceDep
+):
+    await favorite_service.remove_from_favorites(
+        movie_id=movie_id, user_id=current_user.id
+    )
 
 
 @router.get(
