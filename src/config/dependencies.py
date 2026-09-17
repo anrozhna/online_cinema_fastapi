@@ -12,9 +12,14 @@ from notifications.emails import EmailSender
 from notifications.interfaces import EmailSenderInterface
 from repositories import (
     ActivationTokenRepository,
+    CertificationRepository,
+    DirectorRepository,
+    GenreRepository,
+    MovieRepository,
     PasswordResetTokenRepository,
     ProfileRepository,
     RefreshTokenRepository,
+    StarRepository,
     UserGroupRepository,
     UserRepository,
 )
@@ -148,3 +153,8 @@ ActivationTokenRepo = Annotated[ActivationTokenRepository, Depends()]
 PasswordResetTokenRepo = Annotated[PasswordResetTokenRepository, Depends()]
 RefreshTokenRepo = Annotated[RefreshTokenRepository, Depends()]
 ProfileRepo = Annotated[ProfileRepository, Depends()]
+MovieRepo = Annotated[MovieRepository, Depends()]
+GenreRepo = Annotated[GenreRepository, Depends()]
+StarRepo = Annotated[StarRepository, Depends()]
+DirectorRepo = Annotated[DirectorRepository, Depends()]
+CertificationRepo = Annotated[CertificationRepository, Depends()]

@@ -1,5 +1,7 @@
 import os
 
+from database.models.movies import Certification, Director, Genre, Movie, Star
+
 os.environ.setdefault("ENVIRONMENT", "testing")
 
 from collections.abc import AsyncGenerator
@@ -207,3 +209,63 @@ async def authenticated_admin_client(
     yield client
     app.dependency_overrides.pop(get_current_user, None)
     app.dependency_overrides.pop(get_s3_storage, None)
+
+
+@pytest_asyncio.fixture()
+async def certification(db_session: AsyncSession) -> Certification:
+    cert = Certification(name="PG-13")
+    db_session.add(cert)
+    await db_session.commit()
+    await db_session.refresh(cert)
+    return cert
+
+
+@pytest_asyncio.fixture()
+async def genre(db_session: AsyncSession) -> Genre:
+    g = Genre(name="Action")
+    db_session.add(g)
+    await db_session.commit()
+    await db_session.refresh(g)
+    return g
+
+
+@pytest_asyncio.fixture()
+async def director(db_session: AsyncSession) -> Director:
+    d = Director(name="Christopher Nolan")
+    db_session.add(d)
+    await db_session.commit()
+    await db_session.refresh(d)
+    return d
+
+
+@pytest_asyncio.fixture()
+async def star(db_session: AsyncSession) -> Star:
+    s = Star(name="Leonardo DiCaprio")
+    db_session.add(s)
+    await db_session.commit()
+    await db_session.refresh(s)
+    return s
+
+
+async def create_movie(
+    db_session: AsyncSession, certification: Certification, **overrides
+) -> Movie:
+    """Test helper, not a fixture — call directly so each test
+    controls its own field values."""
+    defaults = {
+        "name": "Inception",
+        "year": 2010,
+        "time": 148,
+        "imdb": 8.8,
+        "votes": 2000000,
+        "description": "A thief who steals corporate secrets "
+        "through dream-sharing technology.",
+        "price": 9.99,
+        "certification_id": certification.id,
+    }
+    defaults.update(overrides)
+    movie = Movie(**defaults)
+    db_session.add(movie)
+    await db_session.commit()
+    await db_session.refresh(movie)
+    return movie

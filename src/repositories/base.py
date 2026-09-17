@@ -31,3 +31,13 @@ class BaseRepository(Generic[ModelType]):
 
     async def delete(self, instance: ModelType) -> None:
         await self.db.delete(instance)
+
+
+class NamedEntityRepository(BaseRepository[ModelType]):
+    """For simple reference models with a unique `name` column
+    (Genre, Star, Director, Certification)."""
+
+    async def get_by_name(self, name: str) -> ModelType | None:
+        stmt = select(self.model).where(self.model.name == name)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
