@@ -48,3 +48,15 @@ class EmailSenderInterface(ABC):
             login_link (str): The login link to include in the email.
         """
         pass
+
+    @abstractmethod
+    async def send_comment_reply_email(self, email: str, reply_text: str) -> None:
+        """
+        Asynchronously send a notification email when someone replies
+        to the user's comment.
+
+        Args:
+            email (str): The recipient's email address.
+            reply_text (str): The text of the reply to include in the email.
+        """
+        pass
