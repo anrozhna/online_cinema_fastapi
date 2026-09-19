@@ -53,7 +53,10 @@ class TestChangeUserGroup:
         )
 
         assert response.status_code == 403
-        assert response.json()["detail"] == "Admin privileges required."
+        assert (
+            response.json()["detail"]
+            == "You don't have permission to perform this action."
+        )
 
     async def test_change_group_requires_authentication(
         self, client: AsyncClient, active_user: User, moderator_group
@@ -181,7 +184,10 @@ class TestActivateUserManually:
         )
 
         assert response.status_code == 403
-        assert response.json()["detail"] == "Admin privileges required."
+        assert (
+            response.json()["detail"]
+            == "You don't have permission to perform this action."
+        )
 
     async def test_activate_requires_authentication(
         self, client: AsyncClient, db_session, user_group

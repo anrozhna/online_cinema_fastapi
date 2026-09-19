@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Callable
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from config.settings import GetSettings, Settings, get_settings
 from database.models.accounts import User, UserGroupEnum
+from database.models.movies import Certification, Director, Genre, Star
 from database.session import DataBase
 from exceptions.security import BaseSecurityError
 from notifications.emails import EmailSender
@@ -29,6 +30,7 @@ from repositories import (
 from repositories.favorites import FavoriteMoviesRepository, FavoriteRepository
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
+from services.named_entity_crud import NamedEntityCrud
 from storages.interfaces import S3StorageInterface
 from storages.s3 import S3StorageClient
 
@@ -139,17 +141,28 @@ def verify_profile_owner(user_id: int, current_user: CurrentUser) -> int:
     return user_id
 
 
-def require_admin(current_user: CurrentUser) -> User:
-    """FastAPI dependency to restrict an endpoint to users in the ADMIN group."""
-    if not current_user.has_group(UserGroupEnum.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required.",
-        )
-    return current_user
+def require_roles(*allowed_groups: UserGroupEnum) -> Callable[[User], User]:
+    """Factory for role-checking dependencies.
+
+    Returns a FastAPI dependency that allows access only to users whose
+    group is one of `allowed_groups`. Avoids duplicating the same
+    "check current_user.has_group(...)" logic for every role combination
+    an endpoint might need (admin-only, admin-or-moderator, etc.).
+    """
+
+    def dependency(current_user: CurrentUser) -> User:
+        if not any(current_user.has_group(group) for group in allowed_groups):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to perform this action.",
+            )
+        return current_user
+
+    return dependency
 
 
-AdminUser = Annotated[User, Depends(require_admin)]
+require_admin = require_roles(UserGroupEnum.ADMIN)
+require_admin_or_moderator = require_roles(UserGroupEnum.ADMIN, UserGroupEnum.MODERATOR)
 
 
 UserRepo = Annotated[UserRepository, Depends()]
@@ -168,3 +181,29 @@ RatingRepo = Annotated[RatingRepository, Depends()]
 MovieReactionRepo = Annotated[MovieReactionRepository, Depends()]
 FavoriteRepo = Annotated[FavoriteRepository, Depends()]
 FavoriteMoviesRepo = Annotated[FavoriteMoviesRepository, Depends()]
+
+
+def get_genre_crud(genre_repo: GenreRepo) -> NamedEntityCrud[Genre]:
+    return NamedEntityCrud(genre_repo)
+
+
+def get_star_crud(star_repo: StarRepo) -> NamedEntityCrud[Star]:
+    return NamedEntityCrud(star_repo)
+
+
+def get_director_crud(director_repo: DirectorRepo) -> NamedEntityCrud[Director]:
+    return NamedEntityCrud(director_repo)
+
+
+def get_certification_crud(
+    certification_repo: CertificationRepo,
+) -> NamedEntityCrud[Certification]:
+    return NamedEntityCrud(certification_repo)
+
+
+GenreCrud = Annotated[NamedEntityCrud[Genre], Depends(get_genre_crud)]
+StarCrud = Annotated[NamedEntityCrud[Star], Depends(get_star_crud)]
+DirectorCrud = Annotated[NamedEntityCrud[Director], Depends(get_director_crud)]
+CertificationCrud = Annotated[
+    NamedEntityCrud[Certification], Depends(get_certification_crud)
+]

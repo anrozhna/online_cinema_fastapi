@@ -1,6 +1,12 @@
 from fastapi import FastAPI
 
-from routes import accounts_router, admin_router, movies_router, profiles_router
+from routes import (
+    accounts_router,
+    catalog_management_router,
+    movies_router,
+    profiles_router,
+    user_management_router,
+)
 
 tags_metadata = [
     {
@@ -18,5 +24,8 @@ app = FastAPI(openapi_tags=tags_metadata)
 
 app.include_router(accounts_router, prefix="/accounts", tags=["accounts"])
 app.include_router(profiles_router, prefix="/profiles", tags=["profiles"])
-app.include_router(admin_router, prefix="/admin", tags=["admin"])
+app.include_router(user_management_router, prefix="/admin", tags=["user_management"])
+app.include_router(
+    catalog_management_router, prefix="/moderation", tags=["catalog_management"]
+)
 app.include_router(movies_router, prefix="/movies", tags=["movies"])

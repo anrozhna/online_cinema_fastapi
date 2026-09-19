@@ -212,6 +212,33 @@ async def authenticated_admin_client(
 
 
 @pytest_asyncio.fixture()
+async def moderator_user(db_session: AsyncSession, moderator_group: UserGroup) -> User:
+    user = User.create(
+        email="moderator@example.com",
+        raw_password="StrongP@ssw0rd!",
+        group_id=moderator_group.id,
+    )
+    user.is_active = True
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture()
+async def authenticated_moderator_client(
+    client, moderator_user: User, fake_storage: FakeS3Storage
+):
+    """Same AsyncClient as `client`, but requests
+    are authenticated as moderator_user."""
+    app.dependency_overrides[get_current_user] = lambda: moderator_user
+    app.dependency_overrides[get_s3_storage] = lambda: fake_storage
+    yield client
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_s3_storage, None)
+
+
+@pytest_asyncio.fixture()
 async def certification(db_session: AsyncSession) -> Certification:
     cert = Certification(name="PG-13")
     db_session.add(cert)
