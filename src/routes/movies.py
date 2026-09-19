@@ -41,13 +41,36 @@ router = APIRouter()
 async def list_favorite_movies(
     current_user: CurrentUser,
     favorite_service: FavoriteServiceDep,
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-    year: int | None = Query(default=None),
-    min_imdb: float | None = Query(default=None, ge=0, le=10),
-    search: str | None = Query(default=None, min_length=1),
-    sort_by: MovieSortField | None = Query(default=None),
-    sort_desc: bool = Query(default=False),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="Maximum number of movies to return per page.",
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Number of movies to skip before starting to return results.",
+    ),
+    year: int | None = Query(default=None, description="Filter by exact release year."),
+    min_imdb: float | None = Query(
+        default=None,
+        ge=0,
+        le=10,
+        description="Filter to movies with at least this IMDb rating.",
+    ),
+    search: str | None = Query(
+        default=None,
+        min_length=1,
+        description="Search term matched against title, "
+        "description, director and star names.",
+    ),
+    sort_by: MovieSortField | None = Query(
+        default=None, description="Field to sort results by: price, year, or imdb."
+    ),
+    sort_desc: bool = Query(
+        default=False, description="Sort in descending order instead of ascending."
+    ),
 ):
     return await favorite_service.list_favorites(
         user_id=current_user.id,
@@ -134,13 +157,36 @@ async def get_movie(movie_uuid: uuid_lib.UUID, movie_service: MovieServiceDep):
 )
 async def list_movies(
     movie_service: MovieServiceDep,
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-    year: int | None = Query(default=None),
-    min_imdb: float | None = Query(default=None, ge=0, le=10),
-    search: str | None = Query(default=None, min_length=1),
-    sort_by: MovieSortField | None = Query(default=None),
-    sort_desc: bool = Query(default=False),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="Maximum number of movies to return per page.",
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Number of movies to skip before starting to return results.",
+    ),
+    year: int | None = Query(default=None, description="Filter by exact release year."),
+    min_imdb: float | None = Query(
+        default=None,
+        ge=0,
+        le=10,
+        description="Filter to movies with at least this IMDb rating.",
+    ),
+    search: str | None = Query(
+        default=None,
+        min_length=1,
+        description="Search term matched against title, "
+        "description, director and star names.",
+    ),
+    sort_by: MovieSortField | None = Query(
+        default=None, description="Field to sort results by: price, year, or imdb."
+    ),
+    sort_desc: bool = Query(
+        default=False, description="Sort in descending order instead of ascending."
+    ),
 ):
     return await movie_service.list_movies(
         limit=limit,

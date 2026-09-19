@@ -81,10 +81,12 @@ class MovieBaseSchema(BaseModel):
 class MovieDetailSchema(MovieBaseSchema):
     votes: int = Field(..., description="Number of votes on IMDb.", examples=[2000000])
     meta_score: float | None = Field(
-        default=None, description="Metascore rating, if available."
+        default=None, description="Metascore rating, if available.", examples=[74.0]
     )
     gross: float | None = Field(
-        default=None, description="Gross revenue in USD, if available."
+        default=None,
+        description="Gross revenue in USD, if available.",
+        examples=[292576195.0],
     )
     description: str = Field(..., description="Plot synopsis of the movie.")
     price: float = Field(
@@ -121,41 +123,77 @@ class PaginatedMoviesResponseSchema(BaseModel):
     total: int = Field(
         ...,
         description="Total number of movies matching the filters, across all pages.",
+        examples=[42],
     )
-    limit: int = Field(..., description="Maximum number of items requested per page.")
-    offset: int = Field(..., description="Number of items skipped before this page.")
+    limit: int = Field(
+        ..., description="Maximum number of items requested per page.", examples=[20]
+    )
+    offset: int = Field(
+        ..., description="Number of items skipped before this page.", examples=[0]
+    )
 
 
 class MovieCreateUpdateSchema(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100, description="Movie title.")
-    year: int = Field(..., ge=1888, le=2100, description="Release year.")
-    time: int = Field(..., gt=0, description="Runtime in minutes.")
-    imdb: float = Field(..., ge=0, le=10, description="IMDb rating out of 10.")
-    votes: int = Field(..., ge=0, description="Number of votes on IMDb.")
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Movie title.",
+        examples=["Inception"],
+    )
+    year: int = Field(
+        ..., ge=1888, le=2100, description="Release year.", examples=[2010]
+    )
+    time: int = Field(..., gt=0, description="Runtime in minutes.", examples=[148])
+    imdb: float = Field(
+        ..., ge=0, le=10, description="IMDb rating out of 10.", examples=[8.8]
+    )
+    votes: int = Field(
+        ..., ge=0, description="Number of votes on IMDb.", examples=[2000000]
+    )
     meta_score: float | None = Field(
-        default=None, ge=0, le=100, description="Metascore rating, if available."
+        default=None,
+        ge=0,
+        le=100,
+        description="Metascore rating, if available.",
+        examples=[74.0],
     )
     gross: float | None = Field(
-        default=None, ge=0, description="Gross revenue in USD, if available."
+        default=None,
+        ge=0,
+        description="Gross revenue in USD, if available.",
+        examples=[292576195.0],
     )
     description: str = Field(
-        ..., min_length=1, description="Plot synopsis of the movie."
+        ...,
+        min_length=1,
+        description="Plot synopsis of the movie.",
+        examples=[
+            "A thief who steals corporate secrets through dream-sharing technology."
+        ],
     )
-    price: float = Field(..., gt=0, description="Price to purchase the movie.")
+    price: float = Field(
+        ..., gt=0, description="Price to purchase the movie.", examples=[9.99]
+    )
     certification_id: int = Field(
-        ..., description="ID of an existing certification to assign to the movie."
+        ...,
+        description="ID of an existing certification to assign to the movie.",
+        examples=[1],
     )
     genre_ids: list[int] = Field(
         default_factory=list,
         description="IDs of existing genres to assign to the movie.",
+        examples=[[1, 3]],
     )
     director_ids: list[int] = Field(
         default_factory=list,
         description="IDs of existing directors to assign to the movie.",
+        examples=[[2]],
     )
     star_ids: list[int] = Field(
         default_factory=list,
         description="IDs of existing stars to assign to the movie.",
+        examples=[[4, 7]],
     )
 
 
