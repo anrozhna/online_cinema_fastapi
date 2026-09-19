@@ -10,8 +10,10 @@ from config.dependencies import (
     MovieRepo,
     StarRepo,
 )
+from database.models.movies import Movie
 from repositories.movies import MovieSortField
 from schemas.movies import (
+    MovieCreateUpdateSchema,
     MovieDetailSchema,
     MovieListSchema,
     PaginatedMoviesResponseSchema,
@@ -70,6 +72,119 @@ class MovieService:
             limit=limit,
             offset=offset,
         )
+
+    @staticmethod
+    async def _resolve_ids(repo, ids: list[int], label: str) -> list:
+        if not ids:
+            return []
+        resolved = []
+        for entity_id in ids:
+            entity = await repo.get_by_id(entity_id)
+            if entity is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"{label} with id {entity_id} not found.",
+                )
+            resolved.append(entity)
+        return resolved
+
+    async def create_movie(self, data: MovieCreateUpdateSchema) -> Movie:
+        if await self.movie_repo.exists_by_name_year_time(
+            data.name, data.year, data.time
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A movie with this name, year and duration already exists.",
+            )
+
+        certification = await self.certification_repo.get_by_id(data.certification_id)
+        if certification is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Certification not found.",
+            )
+
+        genres = await self._resolve_ids(self.genre_repo, data.genre_ids, "Genre")
+        directors = await self._resolve_ids(
+            self.director_repo, data.director_ids, "Director"
+        )
+        stars = await self._resolve_ids(self.star_repo, data.star_ids, "Star")
+
+        movie = Movie(
+            name=data.name,
+            year=data.year,
+            time=data.time,
+            imdb=data.imdb,
+            votes=data.votes,
+            meta_score=data.meta_score,
+            gross=data.gross,
+            description=data.description,
+            price=data.price,
+            certification_id=data.certification_id,
+        )
+        movie.genres = genres
+        movie.directors = directors
+        movie.stars = stars
+
+        self.movie_repo.add(movie)
+        await self.movie_repo.db.commit()
+        await self.movie_repo.db.refresh(movie)
+        return movie
+
+    async def update_movie(self, movie_id: int, data: MovieCreateUpdateSchema) -> Movie:
+        movie = await self.movie_repo.get_by_id(movie_id)
+        if movie is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found."
+            )
+
+        certification = await self.certification_repo.get_by_id(data.certification_id)
+        if certification is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Certification not found.",
+            )
+
+        movie.name = data.name
+        movie.year = data.year
+        movie.time = data.time
+        movie.imdb = data.imdb
+        movie.votes = data.votes
+        movie.meta_score = data.meta_score
+        movie.gross = data.gross
+        movie.description = data.description
+        movie.price = data.price
+        movie.certification_id = data.certification_id
+        movie.genres = await self._resolve_ids(self.genre_repo, data.genre_ids, "Genre")
+        movie.directors = await self._resolve_ids(
+            self.director_repo, data.director_ids, "Director"
+        )
+        movie.stars = await self._resolve_ids(self.star_repo, data.star_ids, "Star")
+
+        await self.movie_repo.db.commit()
+        await self.movie_repo.db.refresh(movie)
+        return movie
+
+    async def delete_movie(self, movie_id: int) -> None:
+        movie = await self.movie_repo.get_by_id(movie_id)
+        if movie is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found."
+            )
+
+        # TODO(orders): once Order/OrderItem exist, check here whether this
+        # movie has ever been purchased and raise 409 if so. For now there
+        # is no purchase record anywhere in the system, so deletion is
+        # always allowed.
+        is_purchased = False
+        if is_purchased:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot delete a movie that has been purchased.",
+            )
+
+        await self.movie_repo.delete(movie)
+        await self.movie_repo.db.commit()
 
 
 MovieServiceDep = Annotated[MovieService, Depends()]
