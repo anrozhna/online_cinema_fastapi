@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from config.settings import Settings
 from database.models.accounts import *
 from database.models.base import Base
+from database.models.cart import *
 from database.models.movies import *
 
 config = context.config
