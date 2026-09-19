@@ -2,16 +2,20 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 
-from config.dependencies import CommentRepo, MovieRepo
+from config.dependencies import CommentRepo, MovieRepo, UserRepo
 from database.models.movies import Comment
+from notifications.tasks import send_comment_reply_notification_task
 from schemas.movies import CommentCreateRequestSchema, CommentResponseSchema
 from services.movies_shared import get_movie_or_404
 
 
 class CommentService:
-    def __init__(self, comment_repo: CommentRepo, movie_repo: MovieRepo):
+    def __init__(
+        self, comment_repo: CommentRepo, movie_repo: MovieRepo, user_repo: UserRepo
+    ):
         self.comment_repo = comment_repo
         self.movie_repo = movie_repo
+        self.user_repo = user_repo
 
     @staticmethod
     def _build_comment_tree(comments: list[Comment]) -> list[CommentResponseSchema]:
@@ -60,6 +64,7 @@ class CommentService:
     ) -> CommentResponseSchema:
         await get_movie_or_404(self.movie_repo, movie_id)
 
+        parent = None
         if data.parent_comment_id is not None:
             parent = await self.comment_repo.get_by_id(data.parent_comment_id)
             if parent is None or parent.movie_id != movie_id:
@@ -78,9 +83,13 @@ class CommentService:
         await self.comment_repo.db.commit()
         await self.comment_repo.db.refresh(comment)
 
-        # A freshly created comment can have no replies yet — build the schema
-        # explicitly instead of letting Pydantic touch the unloaded `replies`
-        # relationship (which would trigger a lazy load and MissingGreenlet).
+        if parent is not None and parent.user_id != user_id:
+            parent_author = await self.user_repo.get_by_id(parent.user_id)
+            if parent_author is not None:
+                send_comment_reply_notification_task.delay(
+                    email=parent_author.email, reply_text=comment.text
+                )
+
         return CommentResponseSchema(
             id=comment.id,
             user_id=comment.user_id,

@@ -82,3 +82,13 @@ def delete_expired_tokens_task() -> str:
             )
 
     return asyncio.run(_delete_tokens())
+
+
+@shared_task(name="notifications.send_comment_reply_notification_task")
+def send_comment_reply_notification_task(email: str, reply_text: str) -> None:
+    settings = Settings()
+    email_sender = get_accounts_email_notificator(settings)
+
+    asyncio.run(
+        email_sender.send_comment_reply_email(email=email, reply_text=reply_text)
+    )
