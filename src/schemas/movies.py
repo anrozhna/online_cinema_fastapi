@@ -5,7 +5,13 @@ from pydantic import BaseModel, Field
 
 
 class GenreBaseSchema(BaseModel):
-    name: str = Field(..., description="Genre name.", examples=["Action"])
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Genre name.",
+        examples=["Action"],
+    )
 
 
 class GenreResponseSchema(GenreBaseSchema):
@@ -16,7 +22,11 @@ class GenreResponseSchema(GenreBaseSchema):
 
 class StarBaseSchema(BaseModel):
     name: str = Field(
-        ..., description="Star's full name.", examples=["Leonardo DiCaprio"]
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Star's full name.",
+        examples=["Leonardo DiCaprio"],
     )
 
 
@@ -28,7 +38,11 @@ class StarResponseSchema(StarBaseSchema):
 
 class DirectorBaseSchema(BaseModel):
     name: str = Field(
-        ..., description="Director's full name.", examples=["Christopher Nolan"]
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Director's full name.",
+        examples=["Christopher Nolan"],
     )
 
 
@@ -39,7 +53,13 @@ class DirectorResponseSchema(DirectorBaseSchema):
 
 
 class CertificationBaseSchema(BaseModel):
-    name: str = Field(..., description="Certification name.", examples=["PG-13"])
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Certification name.",
+        examples=["PG-13"],
+    )
 
 
 class CertificationResponseSchema(CertificationBaseSchema):
@@ -104,6 +124,39 @@ class PaginatedMoviesResponseSchema(BaseModel):
     )
     limit: int = Field(..., description="Maximum number of items requested per page.")
     offset: int = Field(..., description="Number of items skipped before this page.")
+
+
+class MovieCreateUpdateSchema(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="Movie title.")
+    year: int = Field(..., ge=1888, le=2100, description="Release year.")
+    time: int = Field(..., gt=0, description="Runtime in minutes.")
+    imdb: float = Field(..., ge=0, le=10, description="IMDb rating out of 10.")
+    votes: int = Field(..., ge=0, description="Number of votes on IMDb.")
+    meta_score: float | None = Field(
+        default=None, ge=0, le=100, description="Metascore rating, if available."
+    )
+    gross: float | None = Field(
+        default=None, ge=0, description="Gross revenue in USD, if available."
+    )
+    description: str = Field(
+        ..., min_length=1, description="Plot synopsis of the movie."
+    )
+    price: float = Field(..., gt=0, description="Price to purchase the movie.")
+    certification_id: int = Field(
+        ..., description="ID of an existing certification to assign to the movie."
+    )
+    genre_ids: list[int] = Field(
+        default_factory=list,
+        description="IDs of existing genres to assign to the movie.",
+    )
+    director_ids: list[int] = Field(
+        default_factory=list,
+        description="IDs of existing directors to assign to the movie.",
+    )
+    star_ids: list[int] = Field(
+        default_factory=list,
+        description="IDs of existing stars to assign to the movie.",
+    )
 
 
 class CommentCreateRequestSchema(BaseModel):
