@@ -8,6 +8,7 @@ from notifications.tasks import (
     delete_expired_tokens_task,
     send_activation_complete_email_task,
     send_activation_email_task,
+    send_comment_reply_notification_task,
     send_password_reset_complete_email_task,
     send_password_reset_email_task,
 )
@@ -78,6 +79,22 @@ class TestCeleryTasks:
             email="test@cinema.com", login_link="http://test/login"
         )
 
+    @patch("notifications.tasks.get_accounts_email_notificator")
+    def test_send_comment_reply_notification_task(self, mock_get_notificator):
+        """Verify send_comment_reply_notification_task triggers the
+        comment-reply email correctly."""
+        mock_email_sender = AsyncMock()
+        mock_get_notificator.return_value = mock_email_sender
+
+        send_comment_reply_notification_task(
+            email="author@cinema.com", reply_text="Totally agree with you!"
+        )
+
+        mock_get_notificator.assert_called_once()
+        mock_email_sender.send_comment_reply_email.assert_called_once_with(
+            email="author@cinema.com", reply_text="Totally agree with you!"
+        )
+
 
 class TestEmailSenderWorkflow:
     """Group of unit tests for verifying Jinja2 rendering
@@ -98,6 +115,7 @@ class TestEmailSenderWorkflow:
             activation_complete_email_template_name="activation_complete.html",
             password_email_template_name="password_reset_request.html",
             password_complete_email_template_name="password_reset_complete.html",
+            comment_reply_template_name="comment_reply.html",
         )
 
     @patch("aiosmtplib.SMTP")
