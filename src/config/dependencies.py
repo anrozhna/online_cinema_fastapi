@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from config.settings import GetSettings, Settings, get_settings
 from database.models.accounts import User, UserGroupEnum
+from database.models.movies import Certification, Director, Genre, Star
 from database.session import DataBase
 from exceptions.security import BaseSecurityError
 from notifications.emails import EmailSender
@@ -29,6 +30,7 @@ from repositories import (
 from repositories.favorites import FavoriteMoviesRepository, FavoriteRepository
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
+from services.named_entity_crud import NamedEntityCrud
 from storages.interfaces import S3StorageInterface
 from storages.s3 import S3StorageClient
 
@@ -179,3 +181,8 @@ RatingRepo = Annotated[RatingRepository, Depends()]
 MovieReactionRepo = Annotated[MovieReactionRepository, Depends()]
 FavoriteRepo = Annotated[FavoriteRepository, Depends()]
 FavoriteMoviesRepo = Annotated[FavoriteMoviesRepository, Depends()]
+
+GenreCrud = Annotated[NamedEntityCrud[Genre], Depends()]
+StarCrud = Annotated[NamedEntityCrud[Star], Depends()]
+DirectorCrud = Annotated[NamedEntityCrud[Director], Depends()]
+CertificationCrud = Annotated[NamedEntityCrud[Certification], Depends()]
