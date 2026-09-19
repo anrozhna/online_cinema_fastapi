@@ -182,7 +182,28 @@ MovieReactionRepo = Annotated[MovieReactionRepository, Depends()]
 FavoriteRepo = Annotated[FavoriteRepository, Depends()]
 FavoriteMoviesRepo = Annotated[FavoriteMoviesRepository, Depends()]
 
-GenreCrud = Annotated[NamedEntityCrud[Genre], Depends()]
-StarCrud = Annotated[NamedEntityCrud[Star], Depends()]
-DirectorCrud = Annotated[NamedEntityCrud[Director], Depends()]
-CertificationCrud = Annotated[NamedEntityCrud[Certification], Depends()]
+
+def get_genre_crud(genre_repo: GenreRepo) -> NamedEntityCrud[Genre]:
+    return NamedEntityCrud(genre_repo)
+
+
+def get_star_crud(star_repo: StarRepo) -> NamedEntityCrud[Star]:
+    return NamedEntityCrud(star_repo)
+
+
+def get_director_crud(director_repo: DirectorRepo) -> NamedEntityCrud[Director]:
+    return NamedEntityCrud(director_repo)
+
+
+def get_certification_crud(
+    certification_repo: CertificationRepo,
+) -> NamedEntityCrud[Certification]:
+    return NamedEntityCrud(certification_repo)
+
+
+GenreCrud = Annotated[NamedEntityCrud[Genre], Depends(get_genre_crud)]
+StarCrud = Annotated[NamedEntityCrud[Star], Depends(get_star_crud)]
+DirectorCrud = Annotated[NamedEntityCrud[Director], Depends(get_director_crud)]
+CertificationCrud = Annotated[
+    NamedEntityCrud[Certification], Depends(get_certification_crud)
+]

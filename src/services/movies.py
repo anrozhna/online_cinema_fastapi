@@ -129,10 +129,14 @@ class MovieService:
         self.movie_repo.add(movie)
         await self.movie_repo.db.commit()
         await self.movie_repo.db.refresh(movie)
-        return movie
+
+        # Refresh alone doesn't eager-load the many-to-many relationships —
+        # re-fetch through get_by_uuid, which already has the correct
+        # joinedload/selectinload options for full serialization.
+        return await self.movie_repo.get_by_uuid(movie.uuid)
 
     async def update_movie(self, movie_id: int, data: MovieCreateUpdateSchema) -> Movie:
-        movie = await self.movie_repo.get_by_id(movie_id)
+        movie = await self.movie_repo.get_by_id_with_relations(movie_id)
         if movie is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found."
@@ -163,7 +167,7 @@ class MovieService:
 
         await self.movie_repo.db.commit()
         await self.movie_repo.db.refresh(movie)
-        return movie
+        return await self.movie_repo.get_by_uuid(movie.uuid)
 
     async def delete_movie(self, movie_id: int) -> None:
         movie = await self.movie_repo.get_by_id(movie_id)

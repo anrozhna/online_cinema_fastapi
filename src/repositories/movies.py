@@ -9,19 +9,27 @@ from repositories.base_movie import BaseMovieRepository, MovieSortField
 class MovieRepository(BaseMovieRepository):
     model = Movie
 
-    async def get_by_uuid(self, movie_uuid) -> Movie | None:
-        stmt = (
-            select(Movie)
-            .options(
-                joinedload(Movie.certification),
-                selectinload(Movie.genres),
-                selectinload(Movie.directors),
-                selectinload(Movie.stars),
-            )
-            .where(Movie.uuid == movie_uuid)
+    async def _get_with_relations(self, **filters) -> Movie | None:
+        """Shared eager-loading query for fetching a single Movie with all
+        its relationships loaded — used by both UUID lookup (public API)
+        and ID lookup (internal, e.g. before an update)."""
+        stmt = select(Movie).options(
+            joinedload(Movie.certification),
+            selectinload(Movie.genres),
+            selectinload(Movie.directors),
+            selectinload(Movie.stars),
         )
+        for field, value in filters.items():
+            stmt = stmt.where(getattr(Movie, field) == value)
+
         result = await self.db.execute(stmt)
         return result.unique().scalar_one_or_none()
+
+    async def get_by_uuid(self, movie_uuid) -> Movie | None:
+        return await self._get_with_relations(uuid=movie_uuid)
+
+    async def get_by_id_with_relations(self, movie_id: int) -> Movie | None:
+        return await self._get_with_relations(id=movie_id)
 
     async def list_movies(
         self,
