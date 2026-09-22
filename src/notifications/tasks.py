@@ -119,3 +119,16 @@ def send_order_items_excluded_notification_task(
             email=email, excluded_movie_names=excluded_movie_names
         )
     )
+
+
+@shared_task(name="notifications.send_order_confirmation_email_task")
+def send_order_confirmation_email_task(
+    email: str, order_id: int, movie_names: str
+) -> None:
+    settings = Settings()
+    email_sender = get_accounts_email_notificator(settings)
+    asyncio.run(
+        email_sender.send_order_confirmation_email(
+            email=email, order_id=order_id, movie_names=movie_names
+        )
+    )

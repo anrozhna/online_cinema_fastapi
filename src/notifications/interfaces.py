@@ -91,3 +91,18 @@ class EmailSenderInterface(ABC):
                 excluded movies to include in the email.
         """
         pass
+
+    @abstractmethod
+    async def send_order_confirmation_email(
+        self, email: str, order_id: int, movie_names: str
+    ) -> None:
+        """
+        Asynchronously notify a user that their order payment was
+        successful and the order is confirmed.
+
+        Args:
+            email (str): The recipient's email address.
+            order_id (int): ID of the confirmed order.
+            movie_names (str): Comma-separated titles of the movies in the order.
+        """
+        pass

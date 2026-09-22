@@ -26,6 +26,7 @@ class EmailSender(EmailSenderInterface):
         comment_reply_template_name: str,
         movie_removed_from_carts_template_name: str,
         order_items_excluded_template_name: str,
+        order_confirmation_template_name: str,
     ):
         self._hostname = hostname
         self._port = port
@@ -41,12 +42,13 @@ class EmailSender(EmailSenderInterface):
             password_complete_email_template_name
         )
         self._comment_reply_template_name = comment_reply_template_name
-
-        self._env = Environment(loader=FileSystemLoader(template_dir))
         self._movie_removed_from_carts_template_name = (
             movie_removed_from_carts_template_name
         )
         self._order_items_excluded_template_name = order_items_excluded_template_name
+        self._order_confirmation_template_name = order_confirmation_template_name
+
+        self._env = Environment(loader=FileSystemLoader(template_dir))
 
     async def _send_email(
         self, recipient: str, subject: str, html_content: str
@@ -163,4 +165,21 @@ class EmailSender(EmailSenderInterface):
         template = self._env.get_template(self._order_items_excluded_template_name)
         html_content = template.render(excluded_movie_names=excluded_movie_names)
         subject = "Some Items Were Excluded From Your Order"
+        await self._send_email(email, subject, html_content)
+
+    async def send_order_confirmation_email(
+        self, email: str, order_id: int, movie_names: str
+    ) -> None:
+        """
+        Asynchronously send an order confirmation email after successful
+        payment.
+
+        Args:
+            email (str): The recipient's email address.
+            order_id (int): ID of the confirmed order.
+            movie_names (str): Comma-separated titles of the movies in the order.
+        """
+        template = self._env.get_template(self._order_confirmation_template_name)
+        html_content = template.render(order_id=order_id, movie_names=movie_names)
+        subject = "Your Order Has Been Confirmed"
         await self._send_email(email, subject, html_content)
