@@ -5,8 +5,6 @@ from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from config.settings import Settings
-
-# Імпортуємо ваші кастомні помилки з пакету exceptions
 from exceptions.storage import S3ConnectionError, S3FileNotFoundError, S3FileUploadError
 from storages.interfaces import S3StorageInterface
 
