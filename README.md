@@ -162,6 +162,32 @@ src/
   marked with `TODO(orders)` for the real order-creation flow once
   `Order`/`OrderItem` exist
 
+### Orders
+- Placing an order (`POST /orders/`) converts the current cart into an
+  `Order` + `OrderItem` rows; each `OrderItem` **snapshots** the
+  movie's price at the time of ordering (`price_at_order`), so a later
+  price change never retroactively affects an existing order
+- Movies already purchased (a `PAID` order item for the same user) or
+  already sitting in another `PENDING` order are excluded from the new
+  order, and the user is emailed a list of what was excluded
+- `OrderItem.movie_id` uses `ondelete="RESTRICT"` (unlike
+  `CartItem.movie_id`, which cascades) — the database itself refuses to
+  delete a movie that has ever been ordered. `MovieService.delete_movie`
+  catches the resulting `IntegrityError` and turns it into a clean
+  `409`, which is what finally replaced the long-standing
+  `TODO(orders)` placeholder
+- Order lifecycle: `PENDING` → `CANCELED` (by the owner, before
+  payment) or `PENDING` → `PAID` → `REFUNDED` (refund is a direct
+  status flip for now, with no separate approval step)
+- `OrderService.revalidate_total_amount` recomputes the total from
+  stored `OrderItem` snapshots — not called anywhere yet, but ready for
+  the future Payments flow to use as the source of truth right before
+  charging
+- Admin/moderator can list all orders across all users, filterable by
+  user ID, status, and creation date range (`GET /orders/admin/`)
+- There is currently no way to transition an order to `PAID` through
+  the API — that arrives with the Stripe webhook in the Payments phase
+
 ### Cross-cutting
 - CI: lint, mypy, pytest with coverage, on every PR
 - MinIO images pulled from `quay.io` (not Docker Hub, where the
@@ -192,8 +218,14 @@ poetry run pytest tests/ -v
 
 ## Known follow-ups
 
-- `checkout` needs a real `Order`/`OrderItem` model and payment flow
-  (Stripe) before it does more than clear the cart.
-- `delete_movie` has a `TODO(orders)` placeholder for "cannot delete a
-  purchased movie" — currently always allows deletion, since there is
-  no purchase record anywhere in the system yet.
+- `checkout` needs the real `Order`/`OrderItem` creation flow to move
+  from "clears the cart" to actually placing an order — **this is now
+  implemented** via `POST /orders/`, but the standalone `POST
+  /cart/checkout/` endpoint itself hasn't been updated to call it yet.
+- There is no way to mark an order `PAID` yet — that requires the
+  Stripe webhook from the Payments phase. `feature/orders-notifications`
+  (order confirmation email) is deferred until then, since it only
+  makes sense once a real "successful payment" event exists.
+- `delete_movie`'s old `TODO(orders)` placeholder is resolved: the
+  database itself now rejects deleting a movie that's ever been
+  ordered, via `OrderItem.movie_id`'s `ondelete="RESTRICT"` foreign key.

@@ -177,3 +177,83 @@ class TestOrderExcludesPurchasedMovies:
 
         assert response.status_code == 400
         assert "already purchased" in response.json()["detail"].lower()
+
+
+class TestListAllOrdersModerator:
+    async def test_admin_can_list_all_orders(
+        self, authenticated_admin_client, active_user, db_session
+    ):
+        order = Order(
+            user_id=active_user.id,
+            status=OrderStatusEnum.PENDING,
+            total_amount=Decimal("9.99"),
+        )
+        db_session.add(order)
+        await db_session.commit()
+
+        response = await authenticated_admin_client.get("/orders/admin/")
+
+        assert response.status_code == 200
+        assert len(response.json()) == 1
+
+    async def test_moderator_can_list_all_orders(self, authenticated_moderator_client):
+        response = await authenticated_moderator_client.get("/orders/admin/")
+
+        assert response.status_code == 200
+
+    async def test_regular_user_cannot_list_all_orders(self, authenticated_client):
+        response = await authenticated_client.get("/orders/admin/")
+
+        assert response.status_code == 403
+
+    async def test_filter_by_status(
+        self, authenticated_admin_client, active_user, db_session
+    ):
+        pending = Order(
+            user_id=active_user.id,
+            status=OrderStatusEnum.PENDING,
+            total_amount=Decimal("9.99"),
+        )
+        canceled = Order(
+            user_id=active_user.id,
+            status=OrderStatusEnum.CANCELED,
+            total_amount=Decimal("12.99"),
+        )
+        db_session.add_all([pending, canceled])
+        await db_session.commit()
+
+        response = await authenticated_admin_client.get(
+            "/orders/admin/", params={"status": "pending"}
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["status"] == "pending"
+
+    async def test_filter_by_user_id(
+        self, authenticated_admin_client, active_user, other_user, db_session
+    ):
+        db_session.add(
+            Order(
+                user_id=active_user.id,
+                status=OrderStatusEnum.PENDING,
+                total_amount=Decimal("9.99"),
+            )
+        )
+        db_session.add(
+            Order(
+                user_id=other_user.id,
+                status=OrderStatusEnum.PENDING,
+                total_amount=Decimal("12.99"),
+            )
+        )
+        await db_session.commit()
+
+        response = await authenticated_admin_client.get(
+            "/orders/admin/", params={"user_id": other_user.id}
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1

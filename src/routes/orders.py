@@ -1,6 +1,9 @@
-from fastapi import APIRouter, status
+from datetime import datetime
 
-from config.dependencies import CurrentUser
+from fastapi import APIRouter, Depends, Query, status
+
+from config.dependencies import CurrentUser, require_admin_or_moderator
+from database.models.orders import OrderStatusEnum
 from schemas.orders import OrderResponseSchema, PlaceOrderResponseSchema
 from services.orders import OrderServiceDep
 
@@ -56,6 +59,7 @@ async def list_orders(current_user: CurrentUser, order_service: OrderServiceDep)
         400: {"description": "Only pending orders can be canceled."},
         401: {"description": "Invalid or missing access token."},
         404: {"description": "Order not found."},
+        422: {"description": "Invalid order_id path parameter."},
     },
 )
 async def cancel_order(
@@ -78,9 +82,52 @@ async def cancel_order(
         400: {"description": "Only paid orders can be refunded."},
         401: {"description": "Invalid or missing access token."},
         404: {"description": "Order not found."},
+        422: {"description": "Invalid order_id path parameter."},
     },
 )
 async def request_refund(
     order_id: int, current_user: CurrentUser, order_service: OrderServiceDep
 ):
     return await order_service.request_refund(current_user.id, order_id)
+
+
+@router.get(
+    path="/admin/",
+    response_model=list[OrderResponseSchema],
+    status_code=status.HTTP_200_OK,
+    summary="List all orders (admin/moderator)",
+    description=(
+        "Retrieve all orders across all users, with optional filters by "
+        "user ID, status, and date range. "
+        "Requires administrator or moderator privileges."
+    ),
+    responses={
+        200: {"description": "Orders retrieved successfully."},
+        403: {"description": "Admin or moderator privileges required."},
+        422: {
+            "description": "Invalid query parameter value "
+            "(e.g. malformed date or status)."
+        },
+    },
+    dependencies=[Depends(require_admin_or_moderator)],
+)
+async def list_all_orders(
+    order_service: OrderServiceDep,
+    user_id: int | None = Query(default=None, description="Filter by user ID."),
+    order_status: OrderStatusEnum | None = Query(
+        default=None, alias="status", description="Filter by order status."
+    ),
+    created_after: datetime | None = Query(
+        default=None, description="Filter to orders created on or after this timestamp."
+    ),
+    created_before: datetime | None = Query(
+        default=None,
+        description="Filter to orders created on or before this timestamp.",
+    ),
+):
+    return await order_service.list_all_orders(
+        user_id=user_id,
+        order_status=order_status,
+        created_after=created_after,
+        created_before=created_before,
+    )

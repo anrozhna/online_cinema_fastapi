@@ -21,7 +21,9 @@ class OrderItemResponseSchema(BaseModel):
 
 class OrderResponseSchema(BaseModel):
     id: int = Field(..., description="Unique identifier of the order.")
-    status: OrderStatusEnum = Field(..., description="Current status of the order.")
+    status: OrderStatusEnum = Field(
+        ..., description="Current status of the order.", examples=["pending"]
+    )
     total_amount: Decimal = Field(
         ..., description="Total amount of the order.", examples=["22.98"]
     )
