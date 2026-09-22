@@ -1,6 +1,6 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
-from config.dependencies import CurrentUser
+from config.dependencies import CurrentUser, require_admin_or_moderator
 from schemas.cart import CartResponseSchema
 from services.cart import CartServiceDep
 
@@ -97,3 +97,22 @@ async def remove_from_cart(
 )
 async def clear_cart(current_user: CurrentUser, cart_service: CartServiceDep):
     await cart_service.clear_cart(current_user.id)
+
+
+@router.get(
+    path="/users/{user_id}/",
+    response_model=CartResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="View any user's cart",
+    description=(
+        "Retrieve any user's cart contents by user ID. "
+        "Requires administrator or moderator privileges."
+    ),
+    responses={
+        200: {"description": "Cart retrieved successfully."},
+        403: {"description": "Admin or moderator privileges required."},
+    },
+    dependencies=[Depends(require_admin_or_moderator)],
+)
+async def view_user_cart(user_id: int, cart_service: CartServiceDep):
+    return await cart_service.get_cart(user_id)
