@@ -25,6 +25,7 @@ class EmailSender(EmailSenderInterface):
         password_complete_email_template_name: str,
         comment_reply_template_name: str,
         movie_removed_from_carts_template_name: str,
+        order_items_excluded_template_name: str,
     ):
         self._hostname = hostname
         self._port = port
@@ -45,6 +46,7 @@ class EmailSender(EmailSenderInterface):
         self._movie_removed_from_carts_template_name = (
             movie_removed_from_carts_template_name
         )
+        self._order_items_excluded_template_name = order_items_excluded_template_name
 
     async def _send_email(
         self, recipient: str, subject: str, html_content: str
@@ -153,4 +155,12 @@ class EmailSender(EmailSenderInterface):
         template = self._env.get_template(self._movie_removed_from_carts_template_name)
         html_content = template.render(movie_name=movie_name, cart_count=cart_count)
         subject = "Movie Deleted While in Carts"
+        await self._send_email(email, subject, html_content)
+
+    async def send_order_items_excluded_email(
+        self, email: str, excluded_movie_names: str
+    ) -> None:
+        template = self._env.get_template(self._order_items_excluded_template_name)
+        html_content = template.render(excluded_movie_names=excluded_movie_names)
+        subject = "Some Items Were Excluded From Your Order"
         await self._send_email(email, subject, html_content)

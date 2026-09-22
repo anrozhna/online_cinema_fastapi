@@ -27,6 +27,7 @@ class BaseAppSettings(BaseSettings):
     PASSWORD_RESET_COMPLETE_TEMPLATE_NAME: str = "password_reset_complete.html"
     COMMENT_REPLY_TEMPLATE_NAME: str = "comment_reply.html"
     MOVIE_REMOVED_FROM_CARTS_TEMPLATE_NAME: str = "movie_removed_from_carts.html"
+    ORDER_ITEMS_EXCLUDED_TEMPLATE_NAME: str = "order_items_excluded.html"
 
     EMAIL_HOST: str = os.getenv("EMAIL_HOST", "host")
     EMAIL_PORT: int = int(os.getenv("EMAIL_PORT", 25))

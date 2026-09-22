@@ -106,3 +106,16 @@ def send_movie_removed_from_carts_notification_task(
             email=email, movie_name=movie_name, cart_count=cart_count
         )
     )
+
+
+@shared_task(name="notifications.send_order_items_excluded_notification_task")
+def send_order_items_excluded_notification_task(
+    email: str, excluded_movie_names: str
+) -> None:
+    settings = Settings()
+    email_sender = get_accounts_email_notificator(settings)
+    asyncio.run(
+        email_sender.send_order_items_excluded_email(
+            email=email, excluded_movie_names=excluded_movie_names
+        )
+    )
