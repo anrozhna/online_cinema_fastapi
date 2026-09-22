@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from routes import (
     accounts_router,
+    cart_router,
     catalog_management_router,
     movies_router,
     profiles_router,
@@ -29,3 +30,4 @@ app.include_router(
     catalog_management_router, prefix="/moderation", tags=["catalog_management"]
 )
 app.include_router(movies_router, prefix="/movies", tags=["movies"])
+app.include_router(cart_router, prefix="/cart", tags=["cart"])
