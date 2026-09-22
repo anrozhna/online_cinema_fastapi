@@ -153,6 +153,11 @@ src/
 ### Cart
 - One cart per user, created lazily on first access
 - Add/remove/view/clear, with duplicate-item protection at the DB level
+- Admin/moderator can view any user's cart by ID
+  (`GET /cart/users/{user_id}/`)
+- Deleting a movie that's present in one or more carts emails every
+  moderator a notification, before the cascade delete removes the
+  corresponding cart items
 - `checkout` currently clears the cart; it's wired end-to-end and
   marked with `TODO(orders)` for the real order-creation flow once
   `Order`/`OrderItem` exist
