@@ -3,9 +3,10 @@ from typing import Annotated
 import stripe
 from fastapi import Depends, HTTPException, status
 
-from config.dependencies import GetSettings, OrderRepo, PaymentRepo
+from config.dependencies import GetSettings, OrderRepo, PaymentRepo, UserRepo
 from database.models.orders import OrderStatusEnum
-from database.models.payments import Payment, PaymentItem
+from database.models.payments import Payment, PaymentItem, PaymentStatusEnum
+from notifications.tasks import send_order_confirmation_email_task
 from schemas.payments import (
     CreateCheckoutSessionResponseSchema,
     PaymentItemResponseSchema,
@@ -15,10 +16,15 @@ from schemas.payments import (
 
 class PaymentService:
     def __init__(
-        self, payment_repo: PaymentRepo, order_repo: OrderRepo, settings: GetSettings
+        self,
+        payment_repo: PaymentRepo,
+        order_repo: OrderRepo,
+        user_repo: UserRepo,
+        settings: GetSettings,
     ):
         self.payment_repo = payment_repo
         self.order_repo = order_repo
+        self.user_repo = user_repo
         self.settings = settings
         stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -34,6 +40,7 @@ class PaymentService:
                 PaymentItemResponseSchema(id=i.id, price_at_payment=i.price_at_payment)
                 for i in payment.items
             ],
+            retry_recommended=payment.status == PaymentStatusEnum.FAILED,
         )
 
     async def create_checkout_session(
@@ -107,6 +114,65 @@ class PaymentService:
     async def list_payments(self, user_id: int) -> list[PaymentResponseSchema]:
         payments = await self.payment_repo.list_by_user(user_id)
         return [self._build_payment_response(p) for p in payments]
+
+    def _construct_stripe_event(self, payload: bytes, signature: str) -> stripe.Event:
+        try:
+            return stripe.Webhook.construct_event(
+                payload, signature, self.settings.STRIPE_WEBHOOK_SECRET
+            )
+        except (ValueError, stripe.error.SignatureVerificationError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid webhook signature.",
+            )
+
+    async def handle_webhook_event(self, payload: bytes, signature: str) -> None:
+        event = self._construct_stripe_event(payload, signature)
+
+        if event["type"] == "checkout.session.completed":
+            await self._handle_payment_success(event["data"]["object"])
+        elif event["type"] in (
+            "checkout.session.expired",
+            "payment_intent.payment_failed",
+        ):
+            await self._handle_payment_failure(event["data"]["object"])
+        # Any other event type is acknowledged but ignored — Stripe expects
+        # a 200 for events we don't act on, not an error.
+
+    async def _handle_payment_success(self, stripe_object) -> None:
+        payment = await self.payment_repo.get_by_external_payment_id(
+            stripe_object["id"]
+        )
+        if payment is None:
+            return  # unknown session — nothing to do, avoid raising to Stripe
+
+        if payment.status == PaymentStatusEnum.SUCCESSFUL:
+            return  # already processed — Stripe may retry the same webhook
+
+        payment.status = PaymentStatusEnum.SUCCESSFUL
+        order = await self.order_repo.get_by_id_with_items(payment.order_id)
+        order.status = OrderStatusEnum.PAID
+        await self.payment_repo.db.commit()
+
+        user = await self.user_repo.get_by_id(payment.user_id)
+        if user is not None:
+            movie_names = ", ".join(item.movie.name for item in order.items)
+            send_order_confirmation_email_task.delay(
+                email=user.email, order_id=order.id, movie_names=movie_names
+            )
+
+    async def _handle_payment_failure(self, stripe_object) -> None:
+        payment = await self.payment_repo.get_by_external_payment_id(
+            stripe_object["id"]
+        )
+        if payment is None:
+            return
+
+        if payment.status == PaymentStatusEnum.FAILED:
+            return
+
+        payment.status = PaymentStatusEnum.FAILED
+        await self.payment_repo.db.commit()
 
 
 PaymentServiceDep = Annotated[PaymentService, Depends()]
