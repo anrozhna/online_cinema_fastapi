@@ -2,6 +2,7 @@ import uuid as uuid_lib
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
 from config.dependencies import (
     CartItemRepo,
@@ -184,20 +185,27 @@ class MovieService:
                 status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found."
             )
 
-        # TODO(orders): once Order/OrderItem exist, check here whether this
-        # movie has ever been purchased and raise 409 if so.
-        is_purchased = False
-        if is_purchased:
+        cart_count = await self.cart_item_repo.count_by_movie_id(movie_id)
+        movie_name = movie.name
+
+        try:
+            await self.movie_repo.delete(movie)
+            await self.movie_repo.db.commit()
+        except IntegrityError:
+            await self.movie_repo.db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Cannot delete a movie that has been purchased.",
             )
 
-        cart_count = await self.cart_item_repo.count_by_movie_id(movie_id)
-
-        movie_name = movie.name
-        await self.movie_repo.delete(movie)
-        await self.movie_repo.db.commit()
+        if cart_count > 0:
+            moderator_emails = await self.user_repo.get_emails_by_group(
+                UserGroupEnum.MODERATOR
+            )
+            for email in moderator_emails:
+                send_movie_removed_from_carts_notification_task.delay(
+                    email=email, movie_name=movie_name, cart_count=cart_count
+                )
 
         if cart_count > 0:
             moderator_emails = await self.user_repo.get_emails_by_group(
