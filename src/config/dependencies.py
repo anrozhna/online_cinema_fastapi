@@ -29,6 +29,7 @@ from repositories import (
 )
 from repositories.cart import CartItemRepository, CartRepository
 from repositories.favorites import FavoriteMoviesRepository, FavoriteRepository
+from repositories.orders import OrderRepository
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
 from services.named_entity_crud import NamedEntityCrud
@@ -186,6 +187,7 @@ FavoriteRepo = Annotated[FavoriteRepository, Depends()]
 FavoriteMoviesRepo = Annotated[FavoriteMoviesRepository, Depends()]
 CartRepo = Annotated[CartRepository, Depends()]
 CartItemRepo = Annotated[CartItemRepository, Depends()]
+OrderRepo = Annotated[OrderRepository, Depends()]
 
 
 def get_genre_crud(genre_repo: GenreRepo) -> NamedEntityCrud[Genre]:
