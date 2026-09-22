@@ -86,7 +86,7 @@ class Settings(BaseAppSettings):
         )
 
 
-class TestingSettings(BaseAppSettings):
+class TestingSettings(Settings):
     """Settings for pytest — no dependency on real .env or Postgres."""
 
     SECRET_KEY_ACCESS: str = "test-secret-key-access"

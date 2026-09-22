@@ -294,5 +294,5 @@ async def create_movie(
     movie = Movie(**defaults)
     db_session.add(movie)
     await db_session.commit()
-    await db_session.refresh(movie)
+    await db_session.refresh(movie, attribute_names=["genres", "directors", "stars"])
     return movie
