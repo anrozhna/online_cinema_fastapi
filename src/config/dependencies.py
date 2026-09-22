@@ -27,6 +27,7 @@ from repositories import (
     UserGroupRepository,
     UserRepository,
 )
+from repositories.cart import CartItemRepository, CartRepository
 from repositories.favorites import FavoriteMoviesRepository, FavoriteRepository
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
@@ -181,6 +182,8 @@ RatingRepo = Annotated[RatingRepository, Depends()]
 MovieReactionRepo = Annotated[MovieReactionRepository, Depends()]
 FavoriteRepo = Annotated[FavoriteRepository, Depends()]
 FavoriteMoviesRepo = Annotated[FavoriteMoviesRepository, Depends()]
+CartRepo = Annotated[CartRepository, Depends()]
+CartItemRepo = Annotated[CartItemRepository, Depends()]
 
 
 def get_genre_crud(genre_repo: GenreRepo) -> NamedEntityCrud[Genre]:
