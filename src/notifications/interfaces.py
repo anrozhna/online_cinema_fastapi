@@ -75,3 +75,19 @@ class EmailSenderInterface(ABC):
             cart_count (int): Number of carts the movie was present in.
         """
         pass
+
+    @abstractmethod
+    async def send_order_items_excluded_email(
+        self, email: str, excluded_movie_names: str
+    ) -> None:
+        """
+        Asynchronously notify a user that some items were excluded from
+        their order because they were already purchased or already in
+        another pending order.
+
+        Args:
+            email (str): The recipient's email address.
+            excluded_movie_names (str): Comma-separated titles of the
+                excluded movies to include in the email.
+        """
+        pass

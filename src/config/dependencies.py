@@ -29,6 +29,7 @@ from repositories import (
 )
 from repositories.cart import CartItemRepository, CartRepository
 from repositories.favorites import FavoriteMoviesRepository, FavoriteRepository
+from repositories.orders import OrderRepository
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
 from services.named_entity_crud import NamedEntityCrud
@@ -118,6 +119,7 @@ def get_accounts_email_notificator(
         password_complete_email_template_name=settings.PASSWORD_RESET_COMPLETE_TEMPLATE_NAME,
         comment_reply_template_name=settings.COMMENT_REPLY_TEMPLATE_NAME,
         movie_removed_from_carts_template_name=settings.MOVIE_REMOVED_FROM_CARTS_TEMPLATE_NAME,
+        order_items_excluded_template_name=settings.ORDER_ITEMS_EXCLUDED_TEMPLATE_NAME,
     )
 
 
@@ -185,6 +187,7 @@ FavoriteRepo = Annotated[FavoriteRepository, Depends()]
 FavoriteMoviesRepo = Annotated[FavoriteMoviesRepository, Depends()]
 CartRepo = Annotated[CartRepository, Depends()]
 CartItemRepo = Annotated[CartItemRepository, Depends()]
+OrderRepo = Annotated[OrderRepository, Depends()]
 
 
 def get_genre_crud(genre_repo: GenreRepo) -> NamedEntityCrud[Genre]:

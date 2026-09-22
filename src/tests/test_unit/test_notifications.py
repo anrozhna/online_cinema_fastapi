@@ -117,6 +117,7 @@ class TestEmailSenderWorkflow:
             password_complete_email_template_name="password_reset_complete.html",
             comment_reply_template_name="comment_reply.html",
             movie_removed_from_carts_template_name="movie_removed_from_carts.html",
+            order_items_excluded_template_name="order_items_excluded.html",
         )
 
     @patch("aiosmtplib.SMTP")
