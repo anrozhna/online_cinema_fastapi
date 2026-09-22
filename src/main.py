@@ -6,6 +6,7 @@ from routes import (
     catalog_management_router,
     movies_router,
     orders_router,
+    payments_router,
     profiles_router,
     user_management_router,
 )
@@ -33,3 +34,4 @@ app.include_router(
 app.include_router(movies_router, prefix="/movies", tags=["movies"])
 app.include_router(cart_router, prefix="/cart", tags=["cart"])
 app.include_router(orders_router, prefix="/orders", tags=["orders"])
+app.include_router(payments_router, prefix="/payments", tags=["payments"])

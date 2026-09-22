@@ -7,7 +7,11 @@ from fastapi import Depends, HTTPException, status
 from config.dependencies import CartItemRepo, CartRepo, OrderRepo, UserRepo
 from database.models.orders import Order, OrderItem, OrderStatusEnum
 from notifications.tasks import send_order_items_excluded_notification_task
-from schemas.orders import OrderResponseSchema, PlaceOrderResponseSchema
+from schemas.orders import (
+    OrderItemResponseSchema,
+    OrderResponseSchema,
+    PlaceOrderResponseSchema,
+)
 
 
 class OrderService:
@@ -31,12 +35,12 @@ class OrderService:
             total_amount=order.total_amount,
             created_at=order.created_at,
             items=[
-                {
-                    "id": item.id,
-                    "movie_id": item.movie_id,
-                    "movie_name": item.movie.name,
-                    "price_at_order": item.price_at_order,
-                }
+                OrderItemResponseSchema(
+                    id=item.id,
+                    movie_id=item.movie_id,
+                    movie_name=item.movie.name,
+                    price_at_order=item.price_at_order,
+                )
                 for item in order.items
             ],
         )
