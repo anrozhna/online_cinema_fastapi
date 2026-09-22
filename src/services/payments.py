@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated
 
 import stripe
@@ -173,6 +174,21 @@ class PaymentService:
 
         payment.status = PaymentStatusEnum.FAILED
         await self.payment_repo.db.commit()
+
+    async def list_all_payments(
+        self,
+        user_id: int | None = None,
+        payment_status: PaymentStatusEnum | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+    ) -> list[PaymentResponseSchema]:
+        payments = await self.payment_repo.list_all(
+            user_id=user_id,
+            status=payment_status,
+            created_after=created_after,
+            created_before=created_before,
+        )
+        return [self._build_payment_response(p) for p in payments]
 
 
 PaymentServiceDep = Annotated[PaymentService, Depends()]
