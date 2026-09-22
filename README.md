@@ -188,13 +188,43 @@ src/
 - There is currently no way to transition an order to `PAID` through
   the API — that arrives with the Stripe webhook in the Payments phase
 
+### Payments (Stripe)
+- `POST /payments/orders/{order_id}/checkout/` creates a Stripe
+  Checkout session for one of the user's own pending orders; the total
+  is always recomputed server-side from stored `OrderItem` price
+  snapshots (`OrderService.revalidate_total_amount`) rather than
+  trusted from the client
+- `POST /payments/webhook/` verifies the Stripe signature
+  (`STRIPE_WEBHOOK_SECRET`) against the raw request body, then:
+  - on `checkout.session.completed` — marks the `Payment` successful,
+    the `Order` `PAID`, and emails an order confirmation
+  - on `checkout.session.expired` / `payment_intent.payment_failed` —
+    marks the `Payment` `FAILED`; the `Order` stays `PENDING` so the
+    user can retry via a new checkout session
+  - both handlers are idempotent (a repeated webhook delivery for an
+    already-processed payment is a no-op) and tolerant of unknown
+    session IDs (returns `200` without raising, since Stripe retries
+    on anything but a 2xx response)
+- `GET /payments/` lists the current user's payment history, each with
+  a `retry_recommended` flag for failed payments
+- Admin/moderator can list all payments with the same filters as
+  orders (`GET /payments/admin/`)
+
 ### Cross-cutting
-- CI: lint, mypy, pytest with coverage, on every PR
+- CI: lint, mypy, pytest with coverage, on every PR; coverage below the
+  configured threshold fails the build
 - MinIO images pulled from `quay.io` (not Docker Hub, where the
   official images are unavailable without authentication)
 - bcrypt rounds are configurable (`Settings.BCRYPT_ROUNDS`); tests run
   with a low round count for speed, production keeps the strong
   default
+- `/docs`, `/redoc` and `/openapi.json` are disabled by default and
+  replaced with admin-gated versions requiring `?token=<access_token>`
+  in the URL — a browser navigating directly to a docs page can't
+  attach an `Authorization` header, so the same JWT the rest of the API
+  uses is passed as a query parameter instead (a documented trade-off:
+  less safe than a header, since it can end up in browser history and
+  server logs)
 
 ## Running tests
 
@@ -211,21 +241,33 @@ poetry run pytest tests/ -v
   database or the FastAPI app.
 - `tests/test_integration/` uses async SQLite (StaticPool, one shared
   connection) with the real FastAPI app and `httpx.AsyncClient`,
-  exercising the full `routes → services → repositories` stack.
+  exercising the full `routes → services → repositories` stack for one
+  endpoint or feature at a time.
+- `tests/test_functional/` chains multiple endpoints into full
+  real-world scenarios end-to-end: registration through login,
+  search/filter/sort together, and the full cart → order → Stripe
+  checkout → webhook → paid-order flow (Stripe itself is always
+  mocked; no real network calls are made in any test).
 - `ENVIRONMENT=testing` is set for the whole test session, which
   switches `get_settings()` to `TestingSettings` (weak bcrypt rounds,
   test secrets) — see `pyproject.toml`'s `pytest-env` configuration.
 
-## Known follow-ups
+### Coverage
 
-- `checkout` needs the real `Order`/`OrderItem` creation flow to move
-  from "clears the cart" to actually placing an order — **this is now
-  implemented** via `POST /orders/`, but the standalone `POST
-  /cart/checkout/` endpoint itself hasn't been updated to call it yet.
-- There is no way to mark an order `PAID` yet — that requires the
-  Stripe webhook from the Payments phase. `feature/orders-notifications`
-  (order confirmation email) is deferred until then, since it only
-  makes sense once a real "successful payment" event exists.
-- `delete_movie`'s old `TODO(orders)` placeholder is resolved: the
-  database itself now rejects deleting a movie that's ever been
-  ordered, via `OrderItem.movie_id`'s `ondelete="RESTRICT"` foreign key.
+Current coverage: **91%** (see `htmlcov/index.html` locally for a
+line-by-line breakdown, or run the command below to regenerate it).
+
+```bash
+poetry run pytest tests/ --cov=src --cov-report=term-missing --cov-report=html
+```
+
+CI enforces a minimum coverage threshold (`--cov-fail-under=80` in
+`pyproject.toml`'s `[tool.coverage.report]`) — a PR that drops overall
+coverage below that fails the build. Open `htmlcov/index.html` locally
+for a line-by-line view of what's covered.
+
+Coverage isn't chased to 100% everywhere on principle: exception-only
+branches (`except SQLAlchemyError: rollback + 500`) are deliberately
+left uncovered where simulating the failure would require mocking the
+database itself — the threshold protects against real regressions in
+business logic, not against every defensive branch.
