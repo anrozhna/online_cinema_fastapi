@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status
 
 from config.dependencies import CurrentUser
-from schemas.orders import PlaceOrderResponseSchema
+from schemas.orders import OrderResponseSchema, PlaceOrderResponseSchema
 from services.orders import OrderServiceDep
 
 router = APIRouter()
@@ -26,3 +26,19 @@ router = APIRouter()
 )
 async def place_order(current_user: CurrentUser, order_service: OrderServiceDep):
     return await order_service.place_order(current_user.id)
+
+
+@router.get(
+    path="/",
+    response_model=list[OrderResponseSchema],
+    status_code=status.HTTP_200_OK,
+    summary="List my orders",
+    description="Retrieve all orders placed by the current user. "
+    "Requires a valid Bearer access token.",
+    responses={
+        200: {"description": "Orders retrieved successfully."},
+        401: {"description": "Invalid or missing access token."},
+    },
+)
+async def list_orders(current_user: CurrentUser, order_service: OrderServiceDep):
+    return await order_service.list_orders(current_user.id)
