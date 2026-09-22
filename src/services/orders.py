@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -154,6 +155,21 @@ class OrderService:
         guard against any total_amount drift or client-side tampering.
         """
         return sum((item.price_at_order for item in order.items), Decimal("0"))
+
+    async def list_all_orders(
+        self,
+        user_id: int | None = None,
+        order_status: OrderStatusEnum | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+    ) -> list[OrderResponseSchema]:
+        orders = await self.order_repo.list_all(
+            user_id=user_id,
+            status=order_status,
+            created_after=created_after,
+            created_before=created_before,
+        )
+        return [self._build_order_response(o) for o in orders]
 
 
 OrderServiceDep = Annotated[OrderService, Depends()]

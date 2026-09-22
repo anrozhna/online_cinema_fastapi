@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -53,3 +55,27 @@ class OrderRepository(BaseRepository[Order]):
         )
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none() is not None
+
+    async def list_all(
+        self,
+        user_id: int | None = None,
+        status: OrderStatusEnum | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+    ) -> list[Order]:
+        stmt = select(Order).options(
+            selectinload(Order.items).selectinload(OrderItem.movie)
+        )
+
+        if user_id is not None:
+            stmt = stmt.where(Order.user_id == user_id)
+        if status is not None:
+            stmt = stmt.where(Order.status == status)
+        if created_after is not None:
+            stmt = stmt.where(Order.created_at >= created_after)
+        if created_before is not None:
+            stmt = stmt.where(Order.created_at <= created_before)
+
+        stmt = stmt.order_by(Order.created_at.desc())
+        result = await self.db.execute(stmt)
+        return list(result.unique().scalars().all())
