@@ -23,7 +23,9 @@ class PaymentResponseSchema(BaseModel):
     created_at: datetime = Field(
         ..., description="Timestamp when the payment was created."
     )
-    items: list[PaymentItemResponseSchema] = Field(default_factory=list)
+    items: list[PaymentItemResponseSchema] = Field(
+        default_factory=list, description="Line items included in this payment."
+    )
     retry_recommended: bool = Field(
         default=False,
         description="True if this payment failed and the order can still be retried.",

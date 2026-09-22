@@ -129,3 +129,86 @@ class TestPaymentHistory:
 
         assert response.status_code == 200
         assert response.json() == []
+
+
+class TestListAllPaymentsModerator:
+    async def test_admin_can_list_all_payments(
+        self, authenticated_admin_client, active_user, db_session
+    ):
+        from decimal import Decimal
+
+        from database.models.payments import Payment
+
+        payment = Payment(user_id=active_user.id, order_id=1, amount=Decimal("9.99"))
+        db_session.add(payment)
+        await db_session.commit()
+
+        response = await authenticated_admin_client.get("/payments/admin/")
+
+        assert response.status_code == 200
+        assert len(response.json()) == 1
+
+    async def test_moderator_can_list_all_payments(
+        self, authenticated_moderator_client
+    ):
+        response = await authenticated_moderator_client.get("/payments/admin/")
+
+        assert response.status_code == 200
+
+    async def test_regular_user_cannot_list_all_payments(self, authenticated_client):
+        response = await authenticated_client.get("/payments/admin/")
+
+        assert response.status_code == 403
+
+    async def test_filter_by_status(
+        self, authenticated_admin_client, active_user, db_session
+    ):
+        from decimal import Decimal
+
+        from database.models.payments import Payment, PaymentStatusEnum
+
+        pending = Payment(
+            user_id=active_user.id,
+            order_id=1,
+            amount=Decimal("9.99"),
+            status=PaymentStatusEnum.PENDING,
+        )
+        failed = Payment(
+            user_id=active_user.id,
+            order_id=2,
+            amount=Decimal("12.99"),
+            status=PaymentStatusEnum.FAILED,
+        )
+        db_session.add_all([pending, failed])
+        await db_session.commit()
+
+        response = await authenticated_admin_client.get(
+            "/payments/admin/", params={"status": "failed"}
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["status"] == "failed"
+
+    async def test_filter_by_user_id(
+        self, authenticated_admin_client, active_user, other_user, db_session
+    ):
+        from decimal import Decimal
+
+        from database.models.payments import Payment
+
+        db_session.add(
+            Payment(user_id=active_user.id, order_id=1, amount=Decimal("9.99"))
+        )
+        db_session.add(
+            Payment(user_id=other_user.id, order_id=2, amount=Decimal("12.99"))
+        )
+        await db_session.commit()
+
+        response = await authenticated_admin_client.get(
+            "/payments/admin/", params={"user_id": other_user.id}
+        )
+
+        assert response.status_code == 200
+        assert len(response.json()) == 1

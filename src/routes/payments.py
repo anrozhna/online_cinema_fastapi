@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Header, Request, status
+from datetime import datetime
 
-from config.dependencies import CurrentUser
+from fastapi import APIRouter, Depends, Header, Query, Request, status
+
+from config.dependencies import CurrentUser, require_admin_or_moderator
+from database.models.payments import PaymentStatusEnum
 from schemas.payments import CreateCheckoutSessionResponseSchema, PaymentResponseSchema
 from services.payments import PaymentServiceDep
 
@@ -69,3 +72,43 @@ async def stripe_webhook(
     payload = await request.body()
     await payment_service.handle_webhook_event(payload, stripe_signature)
     return {"received": True}
+
+
+@router.get(
+    path="/admin/",
+    response_model=list[PaymentResponseSchema],
+    status_code=status.HTTP_200_OK,
+    summary="List all payments (admin/moderator)",
+    description=(
+        "Retrieve all payments across all users, with optional filters by "
+        "user ID, status, and date range. "
+        "Requires administrator or moderator privileges."
+    ),
+    responses={
+        200: {"description": "Payments retrieved successfully."},
+        403: {"description": "Admin or moderator privileges required."},
+        422: {"description": "Invalid query parameter value."},
+    },
+    dependencies=[Depends(require_admin_or_moderator)],
+)
+async def list_all_payments(
+    payment_service: PaymentServiceDep,
+    user_id: int | None = Query(default=None, description="Filter by user ID."),
+    payment_status: PaymentStatusEnum | None = Query(
+        default=None, alias="status", description="Filter by payment status."
+    ),
+    created_after: datetime | None = Query(
+        default=None,
+        description="Filter to payments created on or after this timestamp.",
+    ),
+    created_before: datetime | None = Query(
+        default=None,
+        description="Filter to payments created on or before this timestamp.",
+    ),
+):
+    return await payment_service.list_all_payments(
+        user_id=user_id,
+        payment_status=payment_status,
+        created_after=created_after,
+        created_before=created_before,
+    )
