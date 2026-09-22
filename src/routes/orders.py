@@ -42,3 +42,45 @@ async def place_order(current_user: CurrentUser, order_service: OrderServiceDep)
 )
 async def list_orders(current_user: CurrentUser, order_service: OrderServiceDep):
     return await order_service.list_orders(current_user.id)
+
+
+@router.post(
+    path="/{order_id}/cancel/",
+    response_model=OrderResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Cancel a pending order",
+    description="Cancel one of the current user's own pending orders. "
+    "Requires a valid Bearer access token.",
+    responses={
+        200: {"description": "Order canceled successfully."},
+        400: {"description": "Only pending orders can be canceled."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Order not found."},
+    },
+)
+async def cancel_order(
+    order_id: int, current_user: CurrentUser, order_service: OrderServiceDep
+):
+    return await order_service.cancel_order(current_user.id, order_id)
+
+
+@router.post(
+    path="/{order_id}/refund/",
+    response_model=OrderResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Request a refund for a paid order",
+    description=(
+        "Mark one of the current user's own paid orders as refunded. "
+        "Requires a valid Bearer access token."
+    ),
+    responses={
+        200: {"description": "Order refunded successfully."},
+        400: {"description": "Only paid orders can be refunded."},
+        401: {"description": "Invalid or missing access token."},
+        404: {"description": "Order not found."},
+    },
+)
+async def request_refund(
+    order_id: int, current_user: CurrentUser, order_service: OrderServiceDep
+):
+    return await order_service.request_refund(current_user.id, order_id)
