@@ -24,6 +24,7 @@ class EmailSender(EmailSenderInterface):
         password_email_template_name: str,
         password_complete_email_template_name: str,
         comment_reply_template_name: str,
+        movie_removed_from_carts_template_name: str,
     ):
         self._hostname = hostname
         self._port = port
@@ -41,6 +42,9 @@ class EmailSender(EmailSenderInterface):
         self._comment_reply_template_name = comment_reply_template_name
 
         self._env = Environment(loader=FileSystemLoader(template_dir))
+        self._movie_removed_from_carts_template_name = (
+            movie_removed_from_carts_template_name
+        )
 
     async def _send_email(
         self, recipient: str, subject: str, html_content: str
@@ -141,4 +145,12 @@ class EmailSender(EmailSenderInterface):
         template = self._env.get_template(self._comment_reply_template_name)
         html_content = template.render(reply_text=reply_text)
         subject = "New Reply to Your Comment"
+        await self._send_email(email, subject, html_content)
+
+    async def send_movie_removed_from_carts_email(
+        self, email: str, movie_name: str, cart_count: int
+    ) -> None:
+        template = self._env.get_template(self._movie_removed_from_carts_template_name)
+        html_content = template.render(movie_name=movie_name, cart_count=cart_count)
+        subject = "Movie Deleted While in Carts"
         await self._send_email(email, subject, html_content)

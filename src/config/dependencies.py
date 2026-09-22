@@ -117,6 +117,7 @@ def get_accounts_email_notificator(
         password_email_template_name=settings.PASSWORD_RESET_TEMPLATE_NAME,
         password_complete_email_template_name=settings.PASSWORD_RESET_COMPLETE_TEMPLATE_NAME,
         comment_reply_template_name=settings.COMMENT_REPLY_TEMPLATE_NAME,
+        movie_removed_from_carts_template_name=settings.MOVIE_REMOVED_FROM_CARTS_TEMPLATE_NAME,
     )
 
 

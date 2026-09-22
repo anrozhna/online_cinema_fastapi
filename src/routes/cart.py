@@ -1,6 +1,6 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
-from config.dependencies import CurrentUser
+from config.dependencies import CurrentUser, require_admin_or_moderator
 from schemas.cart import CartResponseSchema
 from services.cart import CartServiceDep
 
@@ -74,6 +74,7 @@ async def view_cart(current_user: CurrentUser, cart_service: CartServiceDep):
         200: {"description": "Movie removed from cart successfully."},
         401: {"description": "Invalid or missing access token."},
         404: {"description": "Movie is not in your cart."},
+        422: {"description": "Invalid movie_id path parameter."},
     },
 )
 async def remove_from_cart(
@@ -97,3 +98,23 @@ async def remove_from_cart(
 )
 async def clear_cart(current_user: CurrentUser, cart_service: CartServiceDep):
     await cart_service.clear_cart(current_user.id)
+
+
+@router.get(
+    path="/users/{user_id}/",
+    response_model=CartResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="View any user's cart",
+    description=(
+        "Retrieve any user's cart contents by user ID. "
+        "Requires administrator or moderator privileges."
+    ),
+    responses={
+        200: {"description": "Cart retrieved successfully."},
+        403: {"description": "Admin or moderator privileges required."},
+        422: {"description": "Invalid movie_id path parameter."},
+    },
+    dependencies=[Depends(require_admin_or_moderator)],
+)
+async def view_user_cart(user_id: int, cart_service: CartServiceDep):
+    return await cart_service.get_cart(user_id)

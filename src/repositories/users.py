@@ -12,6 +12,11 @@ class UserRepository(BaseRepository[User]):
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_emails_by_group(self, group: UserGroupEnum) -> list[str]:
+        stmt = select(User.email).join(UserGroup).where(UserGroup.name == group)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
 
 class UserGroupRepository(BaseRepository[UserGroup]):
     model = UserGroup

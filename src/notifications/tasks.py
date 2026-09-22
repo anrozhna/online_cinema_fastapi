@@ -92,3 +92,17 @@ def send_comment_reply_notification_task(email: str, reply_text: str) -> None:
     asyncio.run(
         email_sender.send_comment_reply_email(email=email, reply_text=reply_text)
     )
+
+
+@shared_task(name="notifications.send_movie_removed_from_carts_notification_task")
+def send_movie_removed_from_carts_notification_task(
+    email: str, movie_name: str, cart_count: int
+) -> None:
+    settings = Settings()
+    email_sender = get_accounts_email_notificator(settings)
+
+    asyncio.run(
+        email_sender.send_movie_removed_from_carts_email(
+            email=email, movie_name=movie_name, cart_count=cart_count
+        )
+    )
