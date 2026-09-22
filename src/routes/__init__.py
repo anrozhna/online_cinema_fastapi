@@ -3,5 +3,6 @@ from routes.cart import router as cart_router
 from routes.catalog_management import router as catalog_management_router
 from routes.movies import router as movies_router
 from routes.orders import router as orders_router
+from routes.payments import router as payments_router
 from routes.profiles import router as profiles_router
 from routes.user_management import router as user_management_router
