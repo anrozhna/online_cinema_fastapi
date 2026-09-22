@@ -59,6 +59,7 @@ async def list_orders(current_user: CurrentUser, order_service: OrderServiceDep)
         400: {"description": "Only pending orders can be canceled."},
         401: {"description": "Invalid or missing access token."},
         404: {"description": "Order not found."},
+        422: {"description": "Invalid order_id path parameter."},
     },
 )
 async def cancel_order(
@@ -81,6 +82,7 @@ async def cancel_order(
         400: {"description": "Only paid orders can be refunded."},
         401: {"description": "Invalid or missing access token."},
         404: {"description": "Order not found."},
+        422: {"description": "Invalid order_id path parameter."},
     },
 )
 async def request_refund(
@@ -102,6 +104,10 @@ async def request_refund(
     responses={
         200: {"description": "Orders retrieved successfully."},
         403: {"description": "Admin or moderator privileges required."},
+        422: {
+            "description": "Invalid query parameter value "
+            "(e.g. malformed date or status)."
+        },
     },
     dependencies=[Depends(require_admin_or_moderator)],
 )
