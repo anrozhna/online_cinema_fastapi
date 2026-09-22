@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Header, Request, status
 
 from config.dependencies import CurrentUser
 from schemas.payments import CreateCheckoutSessionResponseSchema, PaymentResponseSchema
@@ -45,3 +45,27 @@ async def create_checkout_session(
 )
 async def list_payments(current_user: CurrentUser, payment_service: PaymentServiceDep):
     return await payment_service.list_payments(current_user.id)
+
+
+@router.post(
+    path="/webhook/",
+    status_code=status.HTTP_200_OK,
+    summary="Stripe webhook endpoint",
+    description=(
+        "Receives payment confirmation/failure events from Stripe. "
+        "Not intended to be called directly by clients — Stripe verifies "
+        "the request signature against STRIPE_WEBHOOK_SECRET."
+    ),
+    responses={
+        200: {"description": "Event processed (or acknowledged and ignored)."},
+        400: {"description": "Invalid webhook signature."},
+    },
+)
+async def stripe_webhook(
+    request: Request,
+    payment_service: PaymentServiceDep,
+    stripe_signature: str = Header(..., alias="Stripe-Signature"),
+):
+    payload = await request.body()
+    await payment_service.handle_webhook_event(payload, stripe_signature)
+    return {"received": True}

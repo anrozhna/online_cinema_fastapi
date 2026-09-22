@@ -9,6 +9,7 @@ from notifications.tasks import (
     send_activation_complete_email_task,
     send_activation_email_task,
     send_comment_reply_notification_task,
+    send_order_confirmation_email_task,
     send_password_reset_complete_email_task,
     send_password_reset_email_task,
 )
@@ -118,6 +119,7 @@ class TestEmailSenderWorkflow:
             comment_reply_template_name="comment_reply.html",
             movie_removed_from_carts_template_name="movie_removed_from_carts.html",
             order_items_excluded_template_name="order_items_excluded.html",
+            order_confirmation_template_name="order_confirmation.html",
         )
 
     @patch("aiosmtplib.SMTP")
@@ -157,6 +159,22 @@ class TestEmailSenderWorkflow:
         mock_smtp_class.assert_called_once()
         mock_smtp_instance.connect.assert_called_once()
         mock_smtp_instance.sendmail.assert_called_once()
+
+    @patch("notifications.tasks.get_accounts_email_notificator")
+    def test_send_order_confirmation_email_task(self, mock_get_notificator):
+        """Verify send_order_confirmation_email_task triggers the
+        order-confirmation email correctly."""
+        mock_email_sender = AsyncMock()
+        mock_get_notificator.return_value = mock_email_sender
+
+        send_order_confirmation_email_task(
+            email="buyer@cinema.com", order_id=42, movie_names="Inception, Titanic"
+        )
+
+        mock_get_notificator.assert_called_once()
+        mock_email_sender.send_order_confirmation_email.assert_called_once_with(
+            email="buyer@cinema.com", order_id=42, movie_names="Inception, Titanic"
+        )
 
 
 class TestPeriodicTasks:
