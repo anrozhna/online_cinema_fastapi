@@ -60,3 +60,18 @@ class EmailSenderInterface(ABC):
             reply_text (str): The text of the reply to include in the email.
         """
         pass
+
+    @abstractmethod
+    async def send_movie_removed_from_carts_email(
+        self, email: str, movie_name: str, cart_count: int
+    ) -> None:
+        """
+        Asynchronously notify a moderator that a movie was deleted while
+        present in one or more user carts.
+
+        Args:
+            email (str): The recipient's email address.
+            movie_name (str): Title of the deleted movie.
+            cart_count (int): Number of carts the movie was present in.
+        """
+        pass

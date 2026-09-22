@@ -4,13 +4,17 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 
 from config.dependencies import (
+    CartItemRepo,
     CertificationRepo,
     DirectorRepo,
     GenreRepo,
     MovieRepo,
     StarRepo,
+    UserRepo,
 )
+from database.models.accounts import UserGroupEnum
 from database.models.movies import Movie
+from notifications.tasks import send_movie_removed_from_carts_notification_task
 from repositories.movies import MovieSortField
 from schemas.movies import (
     MovieCreateUpdateSchema,
@@ -28,12 +32,16 @@ class MovieService:
         star_repo: StarRepo,
         director_repo: DirectorRepo,
         certification_repo: CertificationRepo,
+        cart_item_repo: CartItemRepo,
+        user_repo: UserRepo,
     ):
         self.movie_repo = movie_repo
         self.genre_repo = genre_repo
         self.star_repo = star_repo
         self.director_repo = director_repo
         self.certification_repo = certification_repo
+        self.cart_item_repo = cart_item_repo
+        self.user_repo = user_repo
 
     async def get_movie_by_uuid(self, movie_uuid: uuid_lib.UUID) -> MovieDetailSchema:
         movie = await self.movie_repo.get_by_uuid(movie_uuid)
@@ -177,9 +185,7 @@ class MovieService:
             )
 
         # TODO(orders): once Order/OrderItem exist, check here whether this
-        # movie has ever been purchased and raise 409 if so. For now there
-        # is no purchase record anywhere in the system, so deletion is
-        # always allowed.
+        # movie has ever been purchased and raise 409 if so.
         is_purchased = False
         if is_purchased:
             raise HTTPException(
@@ -187,8 +193,20 @@ class MovieService:
                 detail="Cannot delete a movie that has been purchased.",
             )
 
+        cart_count = await self.cart_item_repo.count_by_movie_id(movie_id)
+
+        movie_name = movie.name
         await self.movie_repo.delete(movie)
         await self.movie_repo.db.commit()
+
+        if cart_count > 0:
+            moderator_emails = await self.user_repo.get_emails_by_group(
+                UserGroupEnum.MODERATOR
+            )
+            for email in moderator_emails:
+                send_movie_removed_from_carts_notification_task.delay(
+                    email=email, movie_name=movie_name, cart_count=cart_count
+                )
 
 
 MovieServiceDep = Annotated[MovieService, Depends()]

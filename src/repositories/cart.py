@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from database.models.cart import Cart, CartItem
@@ -46,3 +46,12 @@ class CartItemRepository(BaseRepository[CartItem]):
         )
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def count_by_movie_id(self, movie_id: int) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(CartItem)
+            .where(CartItem.movie_id == movie_id)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one()
