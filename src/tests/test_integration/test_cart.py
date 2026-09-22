@@ -114,3 +114,117 @@ class TestCheckout:
 
         view_response = await authenticated_client.get("/cart/")
         assert view_response.json()["items"] == []
+
+
+class TestViewUserCart:
+    async def test_admin_can_view_any_user_cart(
+        self,
+        authenticated_admin_client: AsyncClient,
+        active_user,
+        db_session,
+        certification,
+    ):
+        from database.models.cart import Cart, CartItem
+
+        movie = await create_movie(db_session, certification)
+
+        cart = Cart(user_id=active_user.id)
+        db_session.add(cart)
+        await db_session.commit()
+        await db_session.refresh(cart)
+
+        db_session.add(CartItem(cart_id=cart.id, movie_id=movie.id))
+        await db_session.commit()
+
+        response = await authenticated_admin_client.get(
+            f"/cart/users/{active_user.id}/"
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body["items"]) == 1
+        assert body["items"][0]["movie_name"] == movie.name
+
+    async def test_moderator_can_view_any_user_cart(
+        self, authenticated_moderator_client: AsyncClient, active_user
+    ):
+        response = await authenticated_moderator_client.get(
+            f"/cart/users/{active_user.id}/"
+        )
+
+        assert response.status_code == 200
+
+    async def test_regular_user_cannot_view_other_carts(
+        self, authenticated_client: AsyncClient, other_user
+    ):
+        response = await authenticated_client.get(f"/cart/users/{other_user.id}/")
+
+        assert response.status_code == 403
+
+    async def test_view_user_cart_requires_authentication(
+        self, client: AsyncClient, active_user
+    ):
+        response = await client.get(f"/cart/users/{active_user.id}/")
+
+        assert response.status_code == 401
+
+
+class TestMovieDeletionNotifiesModerators:
+    async def test_deleting_movie_in_cart_succeeds(
+        self,
+        authenticated_admin_client: AsyncClient,
+        db_session,
+        certification,
+        moderator_group,
+        user_group,
+    ):
+        from database.models.accounts import User
+        from database.models.cart import Cart, CartItem
+
+        moderator = User.create(
+            email="mod-notify@example.com",
+            raw_password="StrongP@ssw0rd!",
+            group_id=moderator_group.id,
+        )
+        moderator.is_active = True
+        db_session.add(moderator)
+        await db_session.commit()
+
+        movie = await create_movie(db_session, certification)
+
+        cart_owner = User.create(
+            email="cart-owner-del@example.com",
+            raw_password="StrongP@ssw0rd!",
+            group_id=user_group.id,
+        )
+        cart_owner.is_active = True
+        db_session.add(cart_owner)
+        await db_session.commit()
+
+        cart = Cart(user_id=cart_owner.id)
+        db_session.add(cart)
+        await db_session.commit()
+        await db_session.refresh(cart)
+
+        db_session.add(CartItem(cart_id=cart.id, movie_id=movie.id))
+        await db_session.commit()
+
+        response = await authenticated_admin_client.delete(
+            f"/moderation/movies/{movie.id}/"
+        )
+
+        # The Celery task itself is mocked (mock_celery_tasks autouse fixture);
+        # this confirms the endpoint completes successfully with a movie
+        # present in a cart, i.e. the notification branch doesn't raise.
+        assert response.status_code == 204
+
+    async def test_deleting_movie_not_in_any_cart_succeeds(
+        self, authenticated_admin_client: AsyncClient, db_session, certification
+    ):
+        movie = await create_movie(db_session, certification)
+
+        response = await authenticated_admin_client.delete(
+            f"/moderation/movies/{movie.id}/"
+        )
+
+        assert response.status_code == 204
