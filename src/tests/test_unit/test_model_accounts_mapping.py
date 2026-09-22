@@ -9,13 +9,10 @@ PostgreSQL-specific behavior (e.g. real Enum types, timezone-aware
 server defaults).
 """
 
-from collections.abc import Generator
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, sessionmaker
 
 from database.models.accounts import (
     ActivationToken,
@@ -31,35 +28,10 @@ from database.models.base import Base
 from security.token_hashing import hash_token
 
 
-@pytest.fixture()
-def engine():
-    """In-memory SQLite engine, recreated for each test for full isolation."""
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    yield engine
-    Base.metadata.drop_all(engine)
-
-
-@pytest.fixture()
-def session(engine) -> Generator[Session, None, None]:
-    session_factory = sessionmaker(bind=engine)
-    session = session_factory()
-    yield session
-    session.close()
-
-
-@pytest.fixture()
-def user_group(session) -> UserGroup:
-    group = UserGroup(name=UserGroupEnum.USER)
-    session.add(group)
-    session.commit()
-    return group
-
-
 class TestModelsMapping:
     """Ensures all models are mapped without configuration errors."""
 
-    def test_metadata_creates_all_tables_without_error(self, engine):
+    def test_metadata_creates_all_tables_without_error(self, sync_engine):
         expected_tables = {
             "user_groups",
             "users",
@@ -72,133 +44,150 @@ class TestModelsMapping:
 
 
 class TestUserGroup:
-    def test_create_user_group(self, session):
+    def test_create_sync_user_group(self, sync_session):
         group = UserGroup(name=UserGroupEnum.ADMIN)
-        session.add(group)
-        session.commit()
+        sync_session.add(group)
+        sync_session.commit()
 
-        fetched = session.query(UserGroup).filter_by(name=UserGroupEnum.ADMIN).one()
+        fetched = (
+            sync_session.query(UserGroup).filter_by(name=UserGroupEnum.ADMIN).one()
+        )
         assert fetched.id is not None
         assert fetched.name == UserGroupEnum.ADMIN
 
-    def test_user_group_name_must_be_unique(self, session):
-        session.add(UserGroup(name=UserGroupEnum.MODERATOR))
-        session.commit()
+    def test_sync_user_group_name_must_be_unique(self, sync_session):
+        sync_session.add(UserGroup(name=UserGroupEnum.MODERATOR))
+        sync_session.commit()
 
-        session.add(UserGroup(name=UserGroupEnum.MODERATOR))
+        sync_session.add(UserGroup(name=UserGroupEnum.MODERATOR))
         with pytest.raises(IntegrityError):
-            session.commit()
+            sync_session.commit()
 
 
 class TestUser:
-    def test_create_user_via_factory(self, session, user_group):
+    def test_create_user_via_factory(self, sync_session, sync_user_group):
         user = User.create(
             email="test@example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
-        fetched = session.query(User).filter_by(email="test@example.com").one()
+        fetched = sync_session.query(User).filter_by(email="test@example.com").one()
         assert fetched.id is not None
         assert fetched.is_active is False
-        assert fetched.group_id == user_group.id
+        assert fetched.group_id == sync_user_group.id
 
-    def test_password_is_hashed_not_stored_in_plain_text(self, session, user_group):
+    def test_password_is_hashed_not_stored_in_plain_text(
+        self, sync_session, sync_user_group
+    ):
         raw_password = "StrongP@ssw0rd!"
         user = User.create(
-            email="hash@example.com", raw_password=raw_password, group_id=user_group.id
+            email="hash@example.com",
+            raw_password=raw_password,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
         assert user._hashed_password != raw_password
         assert user.verify_password(raw_password) is True
         assert user.verify_password("wrong-password") is False
 
-    def test_password_getter_raises_attribute_error(self, session, user_group):
+    def test_password_getter_raises_attribute_error(
+        self, sync_session, sync_user_group
+    ):
         user = User.create(
             email="write-only@example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
         with pytest.raises(AttributeError):
             _ = user.password
 
-    def test_email_is_normalized_to_lowercase(self, session, user_group):
+    def test_email_is_normalized_to_lowercase(self, sync_session, sync_user_group):
         user = User.create(
             email="MixedCase@Example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
         assert user.email == "mixedcase@example.com"
 
-    def test_email_must_be_unique(self, session, user_group):
-        session.add(
+    def test_email_must_be_unique(self, sync_session, sync_user_group):
+        sync_session.add(
             User.create(
                 email="dup@example.com",
                 raw_password="StrongP@ssw0rd!",
-                group_id=user_group.id,
+                group_id=sync_user_group.id,
             )
         )
-        session.commit()
+        sync_session.commit()
 
-        session.add(
+        sync_session.add(
             User.create(
                 email="dup@example.com",
                 raw_password="AnotherP@ssw0rd!",
-                group_id=user_group.id,
+                group_id=sync_user_group.id,
             )
         )
         with pytest.raises(IntegrityError):
-            session.commit()
+            sync_session.commit()
 
-    def test_has_group_returns_true_for_matching_group(self, session, user_group):
+    def test_has_group_returns_true_for_matching_group(
+        self, sync_session, sync_user_group
+    ):
         user = User.create(
             email="group-check@example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
         assert user.has_group(UserGroupEnum.USER) is True
         assert user.has_group(UserGroupEnum.ADMIN) is False
 
-    def test_user_deletion_cascades_to_profile_and_tokens(self, session, user_group):
+    def test_user_deletion_cascades_to_profile_and_tokens(
+        self, sync_session, sync_user_group
+    ):
         user = User.create(
             email="cascade@example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
         profile = UserProfile(user_id=user.id, info="bio")
         activation_token = ActivationToken(user_id=user.id)
-        session.add_all([profile, activation_token])
-        session.commit()
+        sync_session.add_all([profile, activation_token])
+        sync_session.commit()
 
-        session.delete(user)
-        session.commit()
+        sync_session.delete(user)
+        sync_session.commit()
 
-        assert session.query(UserProfile).filter_by(user_id=user.id).first() is None
-        assert session.query(ActivationToken).filter_by(user_id=user.id).first() is None
+        assert (
+            sync_session.query(UserProfile).filter_by(user_id=user.id).first() is None
+        )
+        assert (
+            sync_session.query(ActivationToken).filter_by(user_id=user.id).first()
+            is None
+        )
 
 
 class TestUserProfile:
-    def test_create_profile_linked_to_user(self, session, user_group):
+    def test_create_profile_linked_to_user(self, sync_session, sync_user_group):
         user = User.create(
             email="profile@example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
         profile = UserProfile(
             user_id=user.id,
@@ -207,44 +196,44 @@ class TestUserProfile:
             gender=GenderEnum.WOMAN,
             info="Short bio",
         )
-        session.add(profile)
-        session.commit()
+        sync_session.add(profile)
+        sync_session.commit()
 
         assert profile.user.email == "profile@example.com"
         assert user.profile.first_name == "Test"
 
-    def test_profile_user_id_must_be_unique(self, session, user_group):
+    def test_profile_user_id_must_be_unique(self, sync_session, sync_user_group):
         user = User.create(
             email="one-profile@example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
-        session.add(UserProfile(user_id=user.id, info="first"))
-        session.commit()
+        sync_session.add(UserProfile(user_id=user.id, info="first"))
+        sync_session.commit()
 
-        session.add(UserProfile(user_id=user.id, info="second"))
+        sync_session.add(UserProfile(user_id=user.id, info="second"))
         with pytest.raises(IntegrityError):
-            session.commit()
+            sync_session.commit()
 
 
 class TestActivationToken:
     def test_activation_token_has_default_expiration_in_future(
-        self, session, user_group
+        self, sync_session, sync_user_group
     ):
         user = User.create(
             email="activation@example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
         token = ActivationToken(user_id=user.id)
-        session.add(token)
-        session.commit()
+        sync_session.add(token)
+        sync_session.commit()
 
         assert token.token is not None
 
@@ -255,56 +244,56 @@ class TestActivationToken:
 
         assert expires_at > now
 
-    def test_only_one_activation_token_per_user(self, session, user_group):
+    def test_only_one_activation_token_per_user(self, sync_session, sync_user_group):
         user = User.create(
             email="one-activation@example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
-        session.add(ActivationToken(user_id=user.id))
-        session.commit()
+        sync_session.add(ActivationToken(user_id=user.id))
+        sync_session.commit()
 
-        session.add(ActivationToken(user_id=user.id))
+        sync_session.add(ActivationToken(user_id=user.id))
         with pytest.raises(IntegrityError):
-            session.commit()
+            sync_session.commit()
 
 
 class TestPasswordResetToken:
-    def test_only_one_reset_token_per_user(self, session, user_group):
+    def test_only_one_reset_token_per_user(self, sync_session, sync_user_group):
         user = User.create(
             email="one-reset@example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
-        session.add(PasswordResetToken(user_id=user.id))
-        session.commit()
+        sync_session.add(PasswordResetToken(user_id=user.id))
+        sync_session.commit()
 
-        session.add(PasswordResetToken(user_id=user.id))
+        sync_session.add(PasswordResetToken(user_id=user.id))
         with pytest.raises(IntegrityError):
-            session.commit()
+            sync_session.commit()
 
 
 class TestRefreshToken:
-    def test_create_via_factory_sets_expiration(self, session, user_group):
+    def test_create_via_factory_sets_expiration(self, sync_session, sync_user_group):
         user = User.create(
             email="refresh@example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
         raw_token = "a" * 128
 
         token = RefreshToken.create(user_id=user.id, days_valid=7, raw_token=raw_token)
-        session.add(token)
-        session.commit()
+        sync_session.add(token)
+        sync_session.commit()
 
         assert token.token_hash == hash_token(raw_token)
         assert (
@@ -313,16 +302,16 @@ class TestRefreshToken:
             else True
         )
 
-    def test_user_can_have_multiple_refresh_tokens(self, session, user_group):
+    def test_user_can_have_multiple_refresh_tokens(self, sync_session, sync_user_group):
         user = User.create(
             email="multi-refresh@example.com",
             raw_password="StrongP@ssw0rd!",
-            group_id=user_group.id,
+            group_id=sync_user_group.id,
         )
-        session.add(user)
-        session.commit()
+        sync_session.add(user)
+        sync_session.commit()
 
-        session.add_all(
+        sync_session.add_all(
             [
                 RefreshToken.create(
                     user_id=user.id, days_valid=7, raw_token="token-one"
@@ -332,6 +321,6 @@ class TestRefreshToken:
                 ),
             ]
         )
-        session.commit()
+        sync_session.commit()
 
         assert len(user.refresh_tokens) == 2
