@@ -61,6 +61,10 @@ class Settings(BaseAppSettings):
     MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
     MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin123")
 
+    STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_PUBLISHABLE_KEY: str = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+
     BCRYPT_ROUNDS: int = int(os.getenv("BCRYPT_ROUNDS", 14))
 
     @property
@@ -88,6 +92,10 @@ class TestingSettings(BaseAppSettings):
     SECRET_KEY_ACCESS: str = "test-secret-key-access"
     SECRET_KEY_REFRESH: str = "test-secret-key-refresh"
     JWT_SIGNING_ALGORITHM: str = "HS256"
+
+    STRIPE_SECRET_KEY: str = "sk_test_fake_key_for_tests"
+    STRIPE_PUBLISHABLE_KEY: str = "pk_test_fake_key_for_tests"
+    STRIPE_WEBHOOK_SECRET: str = "whsec_fake_secret_for_tests"
 
     BCRYPT_ROUNDS: int = 4
 
